@@ -1,9 +1,10 @@
 from __future__ import division, print_function
 
-from functools import partial
 import warnings
-from itertools import product
 import numpy as np
+
+from functools import partial
+from itertools import product
 
 from sklearn import datasets
 from sklearn import svm
@@ -54,7 +55,14 @@ from sklearn.metrics.metrics import _column_or_1d
 
 from sklearn.externals.six.moves import xrange
 
-ALL_METRICS = {
+REGRESSION_METRICS = {
+    "mean_absolute_error": mean_absolute_error,
+    "mean_squared_error": mean_squared_error,
+    "explained_variance_score": explained_variance_score,
+    "r2_score": r2_score,
+}
+
+CLASSIFICATION_METRICS = {
     "accuracy_score": accuracy_score,
     "unormalized_accuracy_score": partial(accuracy_score, normalize=False),
     "confusion_matrix": confusion_matrix,
@@ -73,8 +81,6 @@ ALL_METRICS = {
     "f2_score": partial(fbeta_score, beta=2),
     "f0.5_score": partial(fbeta_score, beta=0.5),
     "matthews_corrcoef_score": matthews_corrcoef,
-    "auc_score": auc_score,
-    "average_precision_score": average_precision_score,
 
     "weighted_f0.5_score": partial(fbeta_score, average="weighted", beta=0.5),
     "weighted_f1_score": partial(f1_score, average="weighted"),
@@ -94,12 +100,48 @@ ALL_METRICS = {
     "macro_precision_score": partial(precision_score, average="macro"),
     "macro_recall_score": partial(recall_score, average="macro"),
 
-    "mean_absolute_error": mean_absolute_error,
-    "mean_squared_error": mean_squared_error,
-    "explained_variance_score": explained_variance_score,
-    "r2_score": r2_score,
-    "confusion_matrix": partial(confusion_matrix, labels=range(3)),
+    "confusion_matrix": partial(confusion_matrix),
 }
+
+THRESHOLDED_METRICS = {
+    "auc_score": auc_score,
+    "average_precision_score": average_precision_score,
+}
+
+ALL_METRICS = dict()
+ALL_METRICS.update(THRESHOLDED_METRICS)
+ALL_METRICS.update(CLASSIFICATION_METRICS)
+ALL_METRICS.update(REGRESSION_METRICS)
+
+METRICS_WITH_POS_LABEL = [
+    "roc_curve",
+
+    "precision_score", "recall_score", "f1_score", "f2_score", "f0.5_score",
+
+    "weighted_f0.5_score", "weighted_f1_score", "weighted_f2_score",
+    "weighted_precision_score", "weighted_recall_score",
+
+    "micro_f0.5_score", "micro_f1_score", "micro_f2_score",
+    "micro_precision_score", "micro_recall_score",
+
+    "macro_f0.5_score", "macro_f1_score", "macro_f2_score",
+    "macro_precision_score", "macro_recall_score",
+]
+
+METRICS_WITH_LABELS = [
+    "confusion_matrix",
+
+    "precision_score", "recall_score", "f1_score", "f2_score", "f0.5_score",
+
+    "weighted_f0.5_score", "weighted_f1_score", "weighted_f2_score",
+    "weighted_precision_score", "weighted_recall_score",
+
+    "micro_f0.5_score", "micro_f1_score", "micro_f2_score",
+    "micro_precision_score", "micro_recall_score",
+
+    "macro_f0.5_score", "macro_f1_score", "macro_f2_score",
+    "macro_precision_score", "macro_recall_score",
+]
 
 METRICS_WITH_NORMALIZE_OPTION = {
     "accuracy_score ": accuracy_score,
@@ -208,11 +250,6 @@ NOT_SYMMETRIC_METRICS = {
     "macro_recall_score": partial(recall_score, average="macro"),
 
     "confusion_matrix": partial(confusion_matrix, labels=range(3)),
-}
-
-THRESHOLDED_METRICS = {
-    "auc_score": auc_score,
-    "average_precision_score": average_precision_score,
 }
 
 
@@ -705,15 +742,6 @@ avg / total       0.51      0.53      0.47        75
     expected_report = """\
              precision    recall  f1-score   support
 
-          0       0.82      0.92      0.87        25
-          1       0.56      0.17      0.26        30
-          2       0.47      0.90      0.62        20
-
-avg / total       0.62      0.61      0.56        75
-"""
-    expected_report = """\
-             precision    recall  f1-score   support
-
           0       0.83      0.79      0.81        24
           1       0.33      0.10      0.15        31
           2       0.42      0.90      0.57        20
@@ -721,6 +749,38 @@ avg / total       0.62      0.61      0.56        75
 avg / total       0.51      0.53      0.47        75
 """
     report = classification_report(y_true, y_pred)
+    assert_equal(report, expected_report)
+
+
+def test_classification_report_multiclass_with_string_label():
+    y_true, y_pred, _ = make_prediction(binary=False)
+
+    y_true = np.array(["blue", "green", "red"])[y_true]
+    y_pred = np.array(["blue", "green", "red"])[y_pred]
+
+    expected_report = """\
+             precision    recall  f1-score   support
+
+       blue       0.83      0.79      0.81        24
+      green       0.33      0.10      0.15        31
+        red       0.42      0.90      0.57        20
+
+avg / total       0.51      0.53      0.47        75
+"""
+    report = classification_report(y_true, y_pred)
+    assert_equal(report, expected_report)
+
+    expected_report = """\
+             precision    recall  f1-score   support
+
+          a       0.83      0.79      0.81        24
+          b       0.33      0.10      0.15        31
+          c       0.42      0.90      0.57        20
+
+avg / total       0.51      0.53      0.47        75
+"""
+    report = classification_report(y_true, y_pred,
+                                   target_names=["a", "b", "c"])
     assert_equal(report, expected_report)
 
 
@@ -890,7 +950,7 @@ def test_symmetry():
 
     # We shouldn't forget any metrics
     assert_equal(set(SYMMETRIC_METRICS).union(NOT_SYMMETRIC_METRICS,
-                                             THRESHOLDED_METRICS),
+                                              THRESHOLDED_METRICS),
                  set(ALL_METRICS))
 
     assert_equal(set(SYMMETRIC_METRICS).intersection(set(NOT_SYMMETRIC_METRICS)),
@@ -1006,6 +1066,42 @@ def test_format_invariance_with_1d_vectors():
         if (name not in MULTIOUTPUT_METRICS and
                 name not in MULTILABELS_METRICS):
             assert_raises(ValueError, metric, y1_row, y2_row)
+
+
+def test_invariance_string_vs_numbers_labels():
+    """Ensure that classification metrics with string labels"""
+    y1, y2, _ = make_prediction(binary=True)
+
+    y1_str = np.array(["eggs", "spam"])[y1]
+    y2_str = np.array(["eggs", "spam"])[y2]
+
+    pos_label_str = "spam"
+    labels_str = ["eggs", "spam"]
+
+    for name, metric in CLASSIFICATION_METRICS.items():
+        measure_with_number = metric(y1, y2)
+
+        # Ugly, but handle case with a pos_label and label
+        metric_str = metric
+        if name in METRICS_WITH_POS_LABEL:
+            metric_str = partial(metric_str, pos_label=pos_label_str)
+
+        measure_with_str = metric_str(y1_str, y2_str)
+
+        assert_array_equal(measure_with_number, measure_with_str,
+                           err_msg="{0} failed string vs number invariance "
+                                   "test".format(name))
+
+        if name in METRICS_WITH_LABELS:
+            metric_str = partial(metric_str, labels=labels_str)
+            measure_with_str = metric_str(y1_str, y2_str)
+            assert_array_equal(measure_with_number, measure_with_str,
+                               err_msg="{0} failed string vs number  "
+                                       "invariance test".format(name))
+
+    # TODO Currently not supported
+    for name, metrics in THRESHOLDED_METRICS.items():
+        assert_raises(ValueError, metrics, y1_str, y2_str)
 
 
 def test_clf_single_sample():
@@ -1629,21 +1725,33 @@ def test__check_clf_targets():
         (BIN, MCN): None,
     }
 
-    for type1, y1 in EXAMPLES:
-        for type2, y2 in EXAMPLES:
-            try:
-                expected = EXPECTED[type1, type2]
-            except KeyError:
-                expected = EXPECTED[type2, type1]
-            if expected is None:
-                assert_raises(ValueError, _check_clf_targets, y1, y2)
+    for (type1, y1), (type2, y2) in product(EXAMPLES, repeat=2):
+        try:
+            expected = EXPECTED[type1, type2]
+        except KeyError:
+            expected = EXPECTED[type2, type1]
+        if expected is None:
+            assert_raises(ValueError, _check_clf_targets, y1, y2)
+
+            if type1 != type2:
+                assert_raise_message(
+                    ValueError,
+                    "Can't handle mix of {0} and {1}".format(type1, type2),
+                    _check_clf_targets, y1, y2)
+
             else:
-                merged_type, y1out, y2out = _check_clf_targets(y1, y2)
-                assert_equal(merged_type, expected)
-                if not merged_type.startswith('multilabel'):
-                    assert_array_equal(y1out, np.squeeze(y1))
-                    assert_array_equal(y2out, np.squeeze(y2))
-                assert_raises(ValueError, _check_clf_targets, y1[:-1], y2)
+                if type1 not in (BIN, MC, SEQ, IND):
+                    assert_raise_message(ValueError,
+                                         "{0} is not supported".format(type1),
+                                         _check_clf_targets, y1, y2)
+
+        else:
+            merged_type, y1out, y2out = _check_clf_targets(y1, y2)
+            assert_equal(merged_type, expected)
+            if not merged_type.startswith('multilabel'):
+                assert_array_equal(y1out, np.squeeze(y1))
+                assert_array_equal(y2out, np.squeeze(y2))
+            assert_raises(ValueError, _check_clf_targets, y1[:-1], y2)
 
 
 def test__check_reg_targets():
@@ -1657,7 +1765,7 @@ def test__check_reg_targets():
     ]
 
     for (type1, y1, n_out1), (type2, y2, n_out2) in product(EXAMPLES,
-                                                            EXAMPLES):
+                                                            repeat=2):
 
         if type1 == type2 and n_out1 == n_out2:
             y_type, y_check1, y_check2 = _check_reg_targets(y1, y2)

@@ -28,7 +28,7 @@ from .externals.joblib import Parallel, delayed, logger
 from .externals import six
 from .utils import safe_mask, check_random_state
 from .utils.validation import _num_samples, check_arrays
-from .metrics import SCORERS, Scorer
+from .metrics import make_scorer, SCORERS
 
 
 __all__ = ['GridSearchCV', 'ParameterGrid', 'fit_grid_point',
@@ -118,13 +118,13 @@ class IterGrid(ParameterGrid):
 
     Parameters
     ----------
-    param_grid: dict of string to sequence
+    param_grid : dict of string to sequence
         The parameter grid to explore, as a dictionary mapping estimator
         parameters to sequences of allowed values.
 
     Returns
     -------
-    params: dict of string to any
+    params : dict of string to any
         **Yields** dictionaries mapping each estimator parameter to one of its
         allowed values.
 
@@ -402,8 +402,9 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
         X : array-like, shape = [n_samples, n_features]
             Training set.
 
-        y : array-like, shape = [n_samples], optional
-            Labels for X.
+        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
+            Target relative to X for classification or regression;
+            None for unsupervised learning.
 
         Returns
         -------
@@ -465,15 +466,20 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
                           "deprecated and will be removed in 0.15. "
                           "Either use strings or score objects."
                           "The relevant new parameter is called ''scoring''. ")
-            scorer = Scorer(self.loss_func, greater_is_better=False)
+            scorer = make_scorer(self.loss_func, greater_is_better=False)
         elif self.score_func is not None:
             warnings.warn("Passing function as ``score_func`` is "
                           "deprecated and will be removed in 0.15. "
                           "Either use strings or score objects."
                           "The relevant new parameter is called ''scoring''.")
-            scorer = Scorer(self.score_func)
+            scorer = make_scorer(self.score_func)
         elif isinstance(self.scoring, six.string_types):
-            scorer = SCORERS[self.scoring]
+            try:
+                scorer = SCORERS[self.scoring]
+            except KeyError:
+                raise ValueError('%r is not a valid scoring value. '
+                                 'Valid options are %s' % (self.scoring,
+                                 sorted(SCORERS.keys())))
         else:
             scorer = self.scoring
 
@@ -539,9 +545,8 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
 
         # Find the best parameters by comparing on the mean validation score:
         # note that `sorted` is deterministic in the way it breaks ties
-        greater_is_better = getattr(self.scorer_, 'greater_is_better', True)
         best = sorted(cv_scores, key=lambda x: x.mean_validation_score,
-                      reverse=greater_is_better)[0]
+                      reverse=True)[0]
         self.best_params_ = best.parameters
         self.best_score_ = best.mean_validation_score
 
@@ -712,12 +717,12 @@ class GridSearchCV(BaseSearchCV):
         Parameters
         ----------
 
-        X: array-like, shape = [n_samples, n_features]
-            Training vector, where n_samples in the number of samples and
+        X : array-like, shape = [n_samples, n_features]
+            Training vector, where n_samples is the number of samples and
             n_features is the number of features.
 
-        y: array-like, shape = [n_samples], optional
-            Target vector relative to X for classification;
+        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
+            Target relative to X for classification or regression;
             None for unsupervised learning.
 
         """
@@ -869,12 +874,12 @@ class RandomizedSearchCV(BaseSearchCV):
 
         Parameters
         ----------
-        X: array-like, shape = [n_samples, n_features]
+        X : array-like, shape = [n_samples, n_features]
             Training vector, where n_samples in the number of samples and
             n_features is the number of features.
 
-        y: array-like, shape = [n_samples], optional
-            Target vector relative to X for classification;
+        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
+            Target relative to X for classification or regression;
             None for unsupervised learning.
 
         """

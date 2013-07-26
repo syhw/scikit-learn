@@ -7,8 +7,12 @@
 
 Changelog
 ---------
-   - The core implementation of decisions trees has been rewritten from 
-     scratch, allowing for faster tree induction and lower memory 
+
+   - Missing values with sparse and dense matrices can be imputed with the
+     transformer :class:`preprocessing.Imputer` by `Nicolas Trésegnie`_.
+
+   - The core implementation of decisions trees has been rewritten from
+     scratch, allowing for faster tree induction and lower memory
      consumption in all tree-based estimators. By `Gilles Louppe`_.
 
    - Ability to pass one penalty (alpha value) per target in
@@ -129,6 +133,43 @@ Changelog
    - Python 3 support fixes by `Justin Vincent`_, `Lars Buitinck`_ and
      `Olivier Grisel`_. All tests now pass under Python 3.3.
 
+   - Reduce memory footprint of FastICA by `Denis Engemann`_ and
+     `Alexandre Gramfort`_.
+
+   - Verbose output in :mod:`sklearn.ensemble.gradient_boosting` now uses
+     a column format and prints progress in decreasing frequency.
+     It also shows the remaining time. By `Peter Prettenhofer`_.
+
+   - :mod:`sklearn.ensemble.gradient_boosting` provides out-of-bag improvement
+     :attr:`~sklearn.ensemble.GradientBoostingRegressor.oob_improvement_`
+     rather than the OOB score for model selection. An example that shows
+     how to use OOB estimates to select the number of trees was added.
+     By `Peter Prettenhofer`_.
+
+
+   - Most metrics now support string labels for multiclass classification
+     by `Arnaud Joly`_ and `Lars Buitinck`_.
+
+   - Added :ref:`biclustering <biclustering>` algorithms
+     (:class:`sklearn.cluster.bicluster.SpectralCoclustering` and
+     :class:`sklearn.cluster.bicluster.SpectralBiclustering`), data
+     generation methods (:func:`sklearn.datasets.make_biclusters` and
+     :func:`sklearn.datasets.make_checkerboard`), and scoring metrics
+     (:func:`sklearn.metrics.consensus_score`). By `Kemal Eren`_.
+
+   - New OrthogonalMatchingPursuitCV class by `Alexandre Gramfort`_
+     and `Vlad Niculae`_.
+
+   - Fixed a bug in :class:`sklearn.covariance.GraphLassoCV`: the
+     'alphas' parameter now works as expected when given a list of
+     values. By `Philippe Gervais`_.
+
+   - Fixed an important bug in :class:`sklearn.covariance.GraphLassoCV`
+     that prevented all folds provided by a CV object to be used (only
+     the first 3 were used). When providing a CV object, execution
+     time may thus increase significantly compared to the previous
+     version (bug results are correct now). By `Philippe Gervais`_.
+
 
 API changes summary
 -------------------
@@ -179,6 +220,14 @@ API changes summary
 
    - :func:`datasets.load_files`'s ``charset`` and ``charset_errors``
      parameters were renamed ``encoding`` and ``decode_errors``.
+
+   - Attribute ``oob_score_`` in :class:`sklearn.ensemble.GradientBoostingRegressor`
+     and :class:`sklearn.ensemble.GradientBoostingClassifier`
+     is deprecated and has been replaced by ``oob_improvement_`` .
+
+   - Attributes in OrthogonalMatchingPursuit have been deprecated
+     (copy_X, Gram, ...) and precompute_gram renamed precompute
+     for consistency. See #2224
 
 .. _changes_0_13_1:
 
@@ -385,6 +434,9 @@ Changelog
 
    - :class:`MiniBatchKMeans`: Add random reassignment of cluster centers
      with little observations attached to them, by `Gael Varoquaux`_.
+
+   - New transformer :ref:`neural_network.BernoulliRBM`
+     by `Yann Dauphin`_.
 
 
 API changes summary
@@ -845,6 +897,11 @@ Highlights
    - :class:`sklearn.neighbors.NearestCentroid` classifier added, along with a
      ``shrink_threshold`` parameter, which implements **shrunken centroid
      classification**, by `Robert Layton`_.
+
+   - Out-of-core learning support for discrete naive Bayes classifiers
+     :class:`sklearn.naive_bayes.MultinomialNB` and
+     :class:`sklearn.naive_bayes.BernoulliNB` by adding the ``partial_fit``
+     method by `Olivier Grisel`_.
 
 Other changes
 ..............
@@ -2001,3 +2058,9 @@ David Huard, Dave Morrill, Ed Schofield, Travis Oliphant, Pearu Peterson.
 .. _Eustache Diemert: https://github.com/oddskool
 
 .. _Justin Vincent: https://github.com/justinvf
+
+.. _Denis Engemann: https://github.com/dengemann
+
+.. _Nicolas Trésegnie : http://nicolastr.com/
+
+.. _Kemal Eren: http://www.kemaleren.com

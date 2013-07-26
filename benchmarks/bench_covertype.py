@@ -104,13 +104,15 @@ m = Memory(joblib_cache_folder, mmap_mode='r')
 
 # Load the data, then cache and memmap the train/test split
 @m.cache
-def load_data(dtype=np.float32, order='F'):
+def load_data(dtype=np.float32, order='C'):
     ######################################################################
     ## Load dataset
     print("Loading dataset...")
     data = fetch_covtype(download_if_missing=True, shuffle=True,
                          random_state=opts.random_seed)
     X, y = data['data'], data['target']
+    X = np.asarray(X, dtype=dtype)
+    
     if order.lower() == 'f':
         X = np.asfortranarray(X)
 
