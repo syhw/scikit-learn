@@ -7,9 +7,6 @@ the :ref:`full user guide <user_guide>` for further details, as the class and
 function raw specifications may not be enough to give full guidelines on their
 uses.
 
-.. contents:: List of modules
-   :local:
-
 
 .. _cluster_ref:
 
@@ -55,7 +52,7 @@ Functions
 .. _bicluster_ref:
 
 :mod:`sklearn.cluster.bicluster`: Biclustering
-======================================
+==============================================
 
 .. automodule:: sklearn.cluster.bicluster
    :no-members:
@@ -697,6 +694,9 @@ user guide for further details.
 
 Model Selection Interface
 -------------------------
+See the :ref:`scoring_parameter` section of the user guide for further
+details.
+
 .. autosummary::
    :toctree: generated/
    :template: function.rst
@@ -705,6 +705,9 @@ Model Selection Interface
 
 Classification metrics
 ----------------------
+
+See the :ref:`classification_metrics` section of the user guide for further
+details.
 
 .. autosummary::
    :toctree: generated/
@@ -721,6 +724,7 @@ Classification metrics
    metrics.hamming_loss
    metrics.hinge_loss
    metrics.jaccard_similarity_score
+   metrics.log_loss
    metrics.matthews_corrcoef
    metrics.precision_recall_curve
    metrics.precision_recall_fscore_support
@@ -946,8 +950,8 @@ Pairwise metrics
 
 .. _cross_decomposition_ref:
 
-:mod:`sklearn.cross_decomposition`: Cross Decomposition
-==========================================================
+:mod:`sklearn.cross_decomposition`: Cross decomposition
+=======================================================
 
 .. automodule:: sklearn.cross_decomposition
    :no-members:

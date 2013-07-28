@@ -274,6 +274,10 @@ def test_cross_val_score():
         scores = cval.cross_val_score(clf, X_sparse, y)
         assert_array_equal(scores, clf.score(X_sparse, y))
 
+        # test with multioutput y
+        scores = cval.cross_val_score(clf, X_sparse, X)
+        assert_array_equal(scores, clf.score(X_sparse, X))
+
     # test with X as list
     clf = MockListClassifier()
     scores = cval.cross_val_score(clf, X.tolist(), y)

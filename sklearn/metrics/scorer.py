@@ -18,12 +18,13 @@ ground truth labeling (or ``None`` in the case of unsupervised models).
 # License: Simplified BSD
 
 from abc import ABCMeta, abstractmethod
+from warnings import warn
 
 import numpy as np
 
 from . import (r2_score, mean_squared_error, accuracy_score, f1_score,
                auc_score, average_precision_score, precision_score,
-               recall_score)
+               recall_score, log_loss)
 
 from .cluster import adjusted_rand_score
 from ..externals import six
@@ -143,6 +144,41 @@ class _ThresholdScorer(_BaseScorer):
         return ", needs_threshold=True"
 
 
+def _deprecate_loss_and_score_funcs(
+        loss_func=None, score_func=None, scoring=None,
+        score_overrides_loss=False):
+
+    scorer = None
+    if loss_func is not None or score_func is not None:
+
+        if loss_func is not None:
+            warn("Passing a loss function is "
+                 "deprecated and will be removed in 0.15. "
+                 "Either use strings or score objects."
+                 "The relevant new parameter is called ''scoring''. ",
+                 category=DeprecationWarning, stacklevel=2)
+            scorer = make_scorer(loss_func, greater_is_better=False)
+        if score_func is not None:
+            warn("Passing function as ``score_func`` is "
+                 "deprecated and will be removed in 0.15. "
+                 "Either use strings or score objects."
+                 "The relevant new parameter is called ''scoring''.",
+                 category=DeprecationWarning, stacklevel=2)
+            if loss_func is None or score_overrides_loss:
+                scorer = make_scorer(score_func)
+
+    elif isinstance(scoring, six.string_types):
+        try:
+            scorer = SCORERS[scoring]
+        except KeyError:
+            raise ValueError('%r is not a valid scoring value. '
+                             'Valid options are %s' % (scoring,
+                             sorted(SCORERS.keys())))
+    else:
+        scorer = scoring
+    return scorer
+
+
 def make_scorer(score_func, greater_is_better=True, needs_proba=False,
                 needs_threshold=False, **kwargs):
     """Make a scorer from a performance metric or loss function.
@@ -224,6 +260,10 @@ average_precision_scorer = make_scorer(average_precision_score,
 precision_scorer = make_scorer(precision_score)
 recall_scorer = make_scorer(recall_score)
 
+# Score function for probabilistic classification
+log_loss_scorer = make_scorer(log_loss, greater_is_better=False,
+                              needs_proba=True)
+
 # Clustering scores
 adjusted_rand_scorer = make_scorer(adjusted_rand_score)
 
@@ -232,4 +272,5 @@ SCORERS = dict(r2=r2_scorer,
                accuracy=accuracy_scorer, f1=f1_scorer, roc_auc=auc_scorer,
                average_precision=average_precision_scorer,
                precision=precision_scorer, recall=recall_scorer,
+               log_loss=log_loss_scorer,
                adjusted_rand_score=adjusted_rand_scorer)

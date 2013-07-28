@@ -1,5 +1,6 @@
 *.pyc
 *.so
+*.pyd
 *~
 .#*
 *.lprof
@@ -47,3 +48,4 @@ benchmarks/bench_covertype_data/
 
 *.prefs
 .pydevproject
+.idea

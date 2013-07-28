@@ -43,6 +43,7 @@ from sklearn.lda import LDA
 from sklearn.svm.base import BaseLibSVM
 
 from sklearn.cross_validation import train_test_split
+from sklearn.utils.validation import DataConversionWarning
 
 dont_test = ['SparseCoder', 'EllipticEnvelope', 'EllipticEnvelop',
              'DictVectorizer', 'LabelBinarizer', 'LabelEncoder',
@@ -190,9 +191,8 @@ def test_transformers():
         # fit
 
         if name in ('PLSCanonical', 'PLSRegression', 'CCA', 'PLSSVD'):
-            random_state = np.random.RandomState(seed=12345)
-            y_ = np.vstack([y, 2 * y + random_state.randint(2, size=len(y))])
-            y_ = y_.T
+            y_ = np.c_[y, y]
+            y_[::2, 1] *= 2
         else:
             y_ = y
 
@@ -307,7 +307,7 @@ def test_estimators_nan_inf():
             if name in dont_test:
                 continue
             if name in ('PLSCanonical', 'PLSRegression', 'CCA',
-                        'PLSSVD', 'Imputer'): # Imputer accepts nan
+                        'PLSSVD', 'Imputer'):  # Imputer accepts nan
                 continue
 
             # catch deprecation warnings
@@ -636,6 +636,39 @@ def test_classifiers_classes():
         if np.any(classifier.classes_ != classes):
             print("Unexpected classes_ attribute for %r: expected %s, got %s" %
                   (classifier, classes, classifier.classes_))
+
+
+def test_classifiers_input_shapes():
+    # test if classifiers can cope with y.shape = (n_samples, 1)
+    classifiers = all_estimators(type_filter='classifier')
+    iris = load_iris()
+    X, y = iris.data, iris.target
+    X, y = shuffle(X, y, random_state=1)
+    X = StandardScaler().fit_transform(X)
+    for name, Classifier in classifiers:
+        if name in dont_test:
+            continue
+        if name in ["MultinomialNB", "LabelPropagation", "LabelSpreading"]:
+            # TODO some complication with -1 label
+            continue
+
+        # catch deprecation warnings
+        with warnings.catch_warnings(record=True):
+            classifier = Classifier()
+        set_random_state(classifier)
+        # fit
+        classifier.fit(X, y)
+        y_pred = classifier.predict(X)
+
+        set_random_state(classifier)
+        classifier.fit(X, y[:, np.newaxis])
+        # Check that when a 2D y is given, a DataConversionWarning is
+        # raised
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", DataConversionWarning)
+            classifier.fit(X, y[:, np.newaxis])
+        assert_equal(len(w), 1)
+        assert_array_equal(y_pred, classifier.predict(X))
 
 
 def test_classifiers_pickle():

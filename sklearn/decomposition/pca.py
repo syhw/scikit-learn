@@ -123,7 +123,9 @@ class PCA(BaseEstimator, TransformerMixin):
         percentage specified by n_components
 
     copy : bool
-        If False, data passed to fit are overwritten
+        If False, data passed to fit are overwritten and running
+        fit(X).transform(X) will not yield the expected results,
+        use fit_transform(X) instead.
 
     whiten : bool, optional
         When True (False by default) the `components_` vectors are divided
@@ -181,7 +183,7 @@ class PCA(BaseEstimator, TransformerMixin):
         self.copy = copy
         self.whiten = whiten
 
-    def fit(self, X, y=None, **params):
+    def fit(self, X, y=None):
         """Fit the model with X.
 
         Parameters
@@ -195,10 +197,10 @@ class PCA(BaseEstimator, TransformerMixin):
         self : object
             Returns the instance itself.
         """
-        self._fit(X, **params)
+        self._fit(X)
         return self
 
-    def fit_transform(self, X, y=None, **params):
+    def fit_transform(self, X, y=None):
         """Fit the model with X and apply the dimensionality reduction on X.
 
         Parameters
@@ -212,7 +214,7 @@ class PCA(BaseEstimator, TransformerMixin):
         X_new : array-like, shape (n_samples, n_components)
 
         """
-        U, S, V = self._fit(X, **params)
+        U, S, V = self._fit(X)
         U = U[:, :self.n_components]
 
         if self.whiten:
@@ -225,6 +227,19 @@ class PCA(BaseEstimator, TransformerMixin):
         return U
 
     def _fit(self, X):
+        """ Fit the model on X
+        Parameters
+        ----------
+        X: array-like, shape (n_samples, n_features)
+            Training vector, where n_samples in the number of samples and
+            n_features is the number of features.
+
+        Returns
+        -------
+        U, s, V : ndarrays
+            The SVD of the input data, copied and centered when
+            requested.
+        """
         X = array2d(X)
         n_samples, n_features = X.shape
         X = as_float_array(X, copy=self.copy)
@@ -280,8 +295,9 @@ class PCA(BaseEstimator, TransformerMixin):
 
         """
         X = array2d(X)
-        X_transformed = X - self.mean_
-        X_transformed = np.dot(X_transformed, self.components_.T)
+        if self.mean_ is not None:
+            X = X - self.mean_
+        X_transformed = np.dot(X, self.components_.T)
         return X_transformed
 
     def inverse_transform(self, X):
@@ -380,7 +396,9 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
         is set to n_features (the second dimension of the training data).
 
     copy : bool
-        If False, data passed to fit are overwritten
+        If False, data passed to fit are overwritten and running
+        fit(X).transform(X) will not yield the expected results,
+        use fit_transform(X) instead.
 
     iterated_power : int, optional
         Number of iterations for the power method. 3 by default.
@@ -456,6 +474,23 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
         self.random_state = random_state
 
     def fit(self, X, y=None):
+        """Fit the model with X.
+
+        Parameters
+        ----------
+        X: array-like, shape (n_samples, n_features)
+            Training data, where n_samples in the number of samples
+            and n_features is the number of features.
+
+        Returns
+        -------
+        self : object
+            Returns the instance itself.
+        """
+        self._fit(X)
+        return self
+
+    def _fit(self, X):
         """Fit the model to the data X.
 
         Parameters
@@ -466,8 +501,8 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
 
         Returns
         -------
-        self : object
-            Returns the instance itself.
+        X : ndarray, shape (n_samples, n_features)
+            The input data, copied, centered and whitened when requested.
         """
         random_state = check_random_state(self.random_state)
         if hasattr(X, 'todense'):
@@ -498,14 +533,13 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
         self.explained_variance_ratio_ = exp_var / exp_var.sum()
 
         if self.whiten:
-            n = X.shape[0]
-            self.components_ = V / S[:, np.newaxis] * np.sqrt(n)
+            self.components_ = V / S[:, np.newaxis] * np.sqrt(n_samples)
         else:
             self.components_ = V
 
-        return self
+        return X
 
-    def transform(self, X):
+    def transform(self, X, y=None):
         """Apply dimensionality reduction on X.
 
         Parameters
@@ -527,7 +561,25 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
         X = safe_sparse_dot(X, self.components_.T)
         return X
 
-    def inverse_transform(self, X):
+    def fit_transform(self, X, y=None):
+        """Apply dimensionality reduction on X.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            New data, where n_samples in the number of samples
+            and n_features is the number of features.
+
+        Returns
+        -------
+        X_new : array-like, shape (n_samples, n_components)
+
+        """
+        X = self._fit(atleast2d_or_csr(X))
+        X = safe_sparse_dot(X, self.components_.T)
+        return X
+
+    def inverse_transform(self, X, y=None):
         """Transform data back to its original space.
 
         Returns an array X_original whose transform would be X.

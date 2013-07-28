@@ -60,26 +60,29 @@ def test_whitening():
     # the component-wise variance is thus highly varying:
     assert_almost_equal(X.std(axis=0).std(), 43.9, 1)
 
-    # whiten the data while projecting to the lower dim subspace
-    pca = PCA(n_components=n_components, whiten=True)
+    for this_PCA, copy in [(x, y) for x in (PCA, RandomizedPCA)
+                           for y in (True, False)]:
+        # whiten the data while projecting to the lower dim subspace
+        X_ = X.copy()  # make sure we keep an original across iterations.
+        pca = this_PCA(n_components=n_components, whiten=True, copy=copy)
+        # test fit_transform
+        X_whitened = pca.fit_transform(X_.copy())
+        assert_equal(X_whitened.shape, (n_samples, n_components))
+        X_whitened2 = pca.transform(X_)
+        assert_array_almost_equal(X_whitened, X_whitened2)
 
-    # test fit_transform
-    X_whitened = pca.fit_transform(X)
-    assert_equal(X_whitened.shape, (n_samples, n_components))
-    X_whitened2 = pca.transform(X)
-    assert_array_almost_equal(X_whitened, X_whitened2)
+        assert_almost_equal(X_whitened.std(axis=0), np.ones(n_components))
+        assert_almost_equal(X_whitened.mean(axis=0), np.zeros(n_components))
 
-    # all output component have unit variances
-    assert_almost_equal(X_whitened.std(axis=0), np.ones(n_components))
+        X_ = X.copy()
+        pca = this_PCA(n_components=n_components, whiten=False,
+                       copy=copy).fit(X_)
+        X_unwhitened = pca.transform(X_)
+        assert_equal(X_unwhitened.shape, (n_samples, n_components))
 
-    # is possible to project on the low dim space without scaling by the
-    # singular values
-    pca = PCA(n_components=n_components, whiten=False).fit(X)
-    X_unwhitened = pca.transform(X)
-    assert_equal(X_unwhitened.shape, (n_samples, n_components))
-
-    # in that case the output components still have varying variances
-    assert_almost_equal(X_unwhitened.std(axis=0).std(), 74.1, 1)
+        # in that case the output components still have varying variances
+        assert_almost_equal(X_unwhitened.std(axis=0).std(), 74.1, 1)
+        # we always center, so no test for non-centering.
 
 
 def test_pca_check_projection():

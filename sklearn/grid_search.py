@@ -28,7 +28,7 @@ from .externals.joblib import Parallel, delayed, logger
 from .externals import six
 from .utils import safe_mask, check_random_state
 from .utils.validation import _num_samples, check_arrays
-from .metrics import make_scorer, SCORERS
+from .metrics.scorer import _deprecate_loss_and_score_funcs
 
 
 __all__ = ['GridSearchCV', 'ParameterGrid', 'fit_grid_point',
@@ -179,7 +179,7 @@ class ParameterSampler(object):
 
     Returns
     -------
-    params: dict of string to any
+    params : dict of string to any
         **Yields** dictionaries mapping each estimator parameter to
         as sampled value.
 
@@ -247,7 +247,7 @@ def fit_grid_point(X, y, base_estimator, parameters, train, test, scorer,
         Boolean mask or indices for test set.
 
     scorer : callable or None.
-        If provided must be a scoring object / function with signature
+        If provided must be a scorer callable object / function with signature
         ``scorer(estimator, X, y)``.
 
     verbose : int
@@ -400,7 +400,8 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
         Parameters
         ----------
         X : array-like, shape = [n_samples, n_features]
-            Training set.
+            Input data, where n_samples is the number of samples and
+            n_features is the number of features.
 
         y : array-like, shape = [n_samples] or [n_samples, n_output], optional
             Target relative to X for classification or regression;
@@ -461,29 +462,8 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
         n_samples = _num_samples(X)
         X, y = check_arrays(X, y, allow_lists=True, sparse_format='csr')
 
-        if self.loss_func is not None:
-            warnings.warn("Passing a loss function is "
-                          "deprecated and will be removed in 0.15. "
-                          "Either use strings or score objects."
-                          "The relevant new parameter is called ''scoring''. ")
-            scorer = make_scorer(self.loss_func, greater_is_better=False)
-        elif self.score_func is not None:
-            warnings.warn("Passing function as ``score_func`` is "
-                          "deprecated and will be removed in 0.15. "
-                          "Either use strings or score objects."
-                          "The relevant new parameter is called ''scoring''.")
-            scorer = make_scorer(self.score_func)
-        elif isinstance(self.scoring, six.string_types):
-            try:
-                scorer = SCORERS[self.scoring]
-            except KeyError:
-                raise ValueError('%r is not a valid scoring value. '
-                                 'Valid options are %s' % (self.scoring,
-                                 sorted(SCORERS.keys())))
-        else:
-            scorer = self.scoring
-
-        self.scorer_ = scorer
+        self.scorer_ = _deprecate_loss_and_score_funcs(
+            self.loss_func, self.score_func, self.scoring)
 
         if y is not None:
             if len(y) != n_samples:
@@ -508,7 +488,7 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
             n_jobs=self.n_jobs, verbose=self.verbose,
             pre_dispatch=pre_dispatch)(
                 delayed(fit_grid_point)(
-                    X, y, base_estimator, parameters, train, test, scorer,
+                    X, y, base_estimator, parameters, train, test, self.scorer_,
                     self.verbose, **self.fit_params)
                 for parameters in parameter_iterable
                 for train, test in cv)
@@ -584,11 +564,10 @@ class GridSearchCV(BaseSearchCV):
         in the list are explored. This enables searching over any sequence
         of parameter settings.
 
-    scoring : string or callable, optional
-        Either one of either a string ("zero_one", "f1", "roc_auc", ... for
-        classification, "mse", "r2",... for regression) or a callable.
-        See 'Scoring objects' in the model evaluation section of the user guide
-        for details.
+    scoring : string, callable or None, optional, default: None
+        A string (see model evaluation documentation) or
+        a scorer callable object / function with signature
+        ``scorer(estimator, X, y)``.
 
     fit_params : dict, optional
         Parameters to pass to the fit method.
@@ -641,12 +620,13 @@ class GridSearchCV(BaseSearchCV):
     >>> clf.fit(iris.data, iris.target)
     ...                             # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     GridSearchCV(cv=None,
-        estimator=SVC(C=1.0, cache_size=..., coef0=..., degree=...,
-            gamma=..., kernel='rbf', max_iter=-1, probability=False,
-            shrinking=True, tol=...),
-        fit_params={}, iid=True, loss_func=None, n_jobs=1,
-            param_grid=...,
-            ...)
+           estimator=SVC(C=1.0, cache_size=..., class_weight=..., coef0=..., degree=..., gamma=...,
+       kernel='rbf', max_iter=-1, probability=False, random_state=None,
+       shrinking=True, tol=..., verbose=False),
+           fit_params={}, iid=..., loss_func=..., n_jobs=1,
+           param_grid=..., pre_dispatch=..., refit=..., score_func=...,
+           scoring=..., verbose=...)
+
 
     Attributes
     ----------
@@ -760,11 +740,10 @@ class RandomizedSearchCV(BaseSearchCV):
         Number of parameter settings that are sampled. n_iter trades
         off runtime vs quality of the solution.
 
-    scoring : string or callable, optional
-        Either one of either a string ("zero_one", "f1", "roc_auc", ... for
-        classification, "mse", "r2",... for regression) or a callable.
-        See 'Scoring objects' in the model evaluation section of the user guide
-        for details.
+    scoring : string, callable or None, optional, default: None
+        A string (see model evaluation documentation) or
+        a scorer callable object / function with signature
+        ``scorer(estimator, X, y)``.
 
     fit_params : dict, optional
         Parameters to pass to the fit method.
@@ -833,10 +812,8 @@ class RandomizedSearchCV(BaseSearchCV):
 
     Notes
     -----
-    The parameters selected are those that maximize the score of the left out
-    data, unless an explicit score_func is passed in which case it is used
-    instead. If a loss function loss_func is passed, it overrides the score
-    functions and is minimized.
+    The parameters selected are those that maximize the score of the held-out
+    data, according to the scoring parameter.
 
     If `n_jobs` was set to a value higher than one, the data is copied for each
     parameter setting(and not `n_jobs` times). This is done for efficiency
@@ -858,16 +835,16 @@ class RandomizedSearchCV(BaseSearchCV):
     """
 
     def __init__(self, estimator, param_distributions, n_iter=10, scoring=None,
-                 loss_func=None, score_func=None, fit_params=None, n_jobs=1,
-                 iid=True, refit=True, cv=None, verbose=0,
-                 pre_dispatch='2*n_jobs', random_state=None):
+                 fit_params=None, n_jobs=1, iid=True, refit=True, cv=None,
+                 verbose=0, pre_dispatch='2*n_jobs', random_state=None):
 
         self.param_distributions = param_distributions
         self.n_iter = n_iter
         self.random_state = random_state
         super(RandomizedSearchCV, self).__init__(
-            estimator, scoring, loss_func, score_func, fit_params, n_jobs, iid,
-            refit, cv, verbose, pre_dispatch)
+            estimator=estimator, scoring=scoring, fit_params=fit_params,
+            n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
+            pre_dispatch=pre_dispatch)
 
     def fit(self, X, y=None):
         """Run fit on the estimator with randomly drawn parameters.
