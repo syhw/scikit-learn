@@ -85,7 +85,7 @@ except ImportError:
             error_message = str(e)
             if not re.compile(expected_regexp).match(error_message):
                 raise AssertionError("Error message should match pattern "
-                                     "'%s'. '%s' does not." %
+                                     "%r. %r does not." %
                                      (expected_regexp, error_message))
         if not_raised:
             raise AssertionError("Should have raised %r" %
@@ -120,7 +120,6 @@ def assert_greater_equal(a, b, msg=None):
     assert a >= b, message
 
 
-# To remove when we support numpy 1.7
 def assert_warns(warning_class, func, *args, **kw):
     """Test that a certain warning occurs.
 
@@ -150,16 +149,20 @@ def assert_warns(warning_class, func, *args, **kw):
         warnings.simplefilter("always")
         # Trigger a warning.
         result = func(*args, **kw)
+        if hasattr(np, 'VisibleDeprecationWarning'):
+            # Filter out numpy-specific warnings in numpy >= 1.9
+            w = [e for e in w
+                 if not e.category is np.VisibleDeprecationWarning]
+
         # Verify some things
         if not len(w) > 0:
             raise AssertionError("No warning raised when calling %s"
                                  % func.__name__)
 
-        if not w[0].category is warning_class:
-            raise AssertionError("First warning for %s is not a "
-                                 "%s( is %s)"
-                                 % (func.__name__, warning_class, w[0]))
-
+        found = any(warning.category is warning_class for warning in w)
+        if not found:
+            raise AssertionError("%s did not give warning: %s( is %s)"
+                                 % (func.__name__, warning_class, w))
     return result
 
 
@@ -194,6 +197,9 @@ def assert_warns_message(warning_class, message, func, *args, **kw):
     with warnings.catch_warnings(record=True) as w:
         # Cause all warnings to always be triggered.
         warnings.simplefilter("always")
+        if hasattr(np, 'VisibleDeprecationWarning'):
+            # Let's not catch the numpy internal DeprecationWarnings
+            warnings.simplefilter('ignore', np.VisibleDeprecationWarning)
         # Trigger a warning.
         result = func(*args, **kw)
         # Verify some things
@@ -232,6 +238,11 @@ def assert_no_warnings(func, *args, **kw):
         warnings.simplefilter('always')
 
         result = func(*args, **kw)
+        if hasattr(np, 'VisibleDeprecationWarning'):
+            # Filter out numpy-specific warnings in numpy >= 1.9
+            w = [e for e in w
+                 if not e.category is np.VisibleDeprecationWarning]
+
         if len(w) > 0:
             raise AssertionError("Got warnings when calling %s: %s"
                                  % (func.__name__, w))
@@ -455,15 +466,22 @@ def uninstall_mldata_mock():
 
 
 # Meta estimators need another estimator to be instantiated.
-meta_estimators = ["OneVsOneClassifier",
+META_ESTIMATORS = ["OneVsOneClassifier",
                    "OutputCodeClassifier", "OneVsRestClassifier", "RFE",
                    "RFECV", "BaseEnsemble"]
 # estimators that there is no way to default-construct sensibly
-other = ["Pipeline", "FeatureUnion", "GridSearchCV", "RandomizedSearchCV"]
+OTHER = ["Pipeline", "FeatureUnion", "GridSearchCV", "RandomizedSearchCV"]
+
+# some trange ones
+DONT_TEST = ['SparseCoder', 'EllipticEnvelope', 'DictVectorizer',
+             'LabelBinarizer', 'LabelEncoder', 'MultiLabelBinarizer',
+             'TfidfTransformer', 'IsotonicRegression', 'OneHotEncoder',
+             'RandomTreesEmbedding', 'FeatureHasher', 'DummyClassifier',
+             'DummyRegressor', 'TruncatedSVD', 'PolynomialFeatures']
 
 
 def all_estimators(include_meta_estimators=False, include_other=False,
-                   type_filter=None):
+                   type_filter=None, include_dont_test=False):
     """Get a list of all estimators from sklearn.
 
     This function crawls the module and gets all classes that inherit
@@ -479,10 +497,13 @@ def all_estimators(include_meta_estimators=False, include_other=False,
         BaseEnsemble, OneVsOneClassifier, OutputCodeClassifier,
         OneVsRestClassifier, RFE, RFECV.
 
-    include_others : boolean, default=False
+    include_other : boolean, default=False
         Wether to include meta-estimators that are somehow special and can
         not be default-constructed sensibly. These are currently
         Pipeline, FeatureUnion and GridSearchCV
+
+    include_dont_test : boolean, default=False
+        Whether to include "special" label estimator or test processors.
 
     type_filter : string or None, default=None
         Which kind of estimators should be returned. If None, no filter is
@@ -522,11 +543,14 @@ def all_estimators(include_meta_estimators=False, include_other=False,
     # get rid of abstract base classes
     estimators = [c for c in estimators if not is_abstract(c[1])]
 
+    if not include_dont_test:
+        estimators = [c for c in estimators if not c[0] in DONT_TEST]
+
     if not include_other:
-        estimators = [c for c in estimators if not c[0] in other]
+        estimators = [c for c in estimators if not c[0] in OTHER]
     # possibly get rid of meta estimators
     if not include_meta_estimators:
-        estimators = [c for c in estimators if not c[0] in meta_estimators]
+        estimators = [c for c in estimators if not c[0] in META_ESTIMATORS]
 
     if type_filter == 'classifier':
         estimators = [est for est in estimators
@@ -579,6 +603,7 @@ def if_not_mac_os(versions=('10.7', '10.8', '10.9'),
     """
     mac_version, _, _ = platform.mac_ver()
     skip = '.'.join(mac_version.split('.')[:2]) in versions
+
     def decorator(func):
         if skip:
             @wraps(func)
@@ -592,7 +617,9 @@ def clean_warning_registry():
     """Safe way to reset warnings """
     warnings.resetwarnings()
     reg = "__warningregistry__"
-    for mod in sys.modules.copy().values():
+    for mod_name, mod in list(sys.modules.items()):
+        if 'six.moves' in mod_name:
+            continue
         if hasattr(mod, reg):
             getattr(mod, reg).clear()
 

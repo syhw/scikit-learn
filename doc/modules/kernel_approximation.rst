@@ -19,12 +19,15 @@ can be better suited for online learning and can significantly reduce the cost
 of learning with very large datasets.
 Standard kernelized SVMs do not scale well to large datasets, but using an
 approximate kernel map it is possible to use much more efficient linear SVMs.
-In particularly the combination of kernel map approximations with
+In particular, the combination of kernel map approximations with
 :class:`SGDClassifier` can make non-linear learning on large datasets possible.
 
 Since there has not been much empirical work using approximate embeddings, it
 is advisable to compare results against exact kernel methods when possible.
 
+.. seealso
+
+   :ref:`polynomial_regression` for an exact polynomial transformation.
 
 .. currentmodule:: sklearn.kernel_approximation
 
