@@ -8,10 +8,10 @@ Clustering
 unlabeled data can be performed with the module :mod:`sklearn.cluster`.
 
 Each clustering algorithm comes in two variants: a class, that implements
-the `fit` method to learn the clusters on train data, and a function,
+the ``fit`` method to learn the clusters on train data, and a function,
 that, given train data, returns an array of integer labels corresponding
 to the different clusters. For the class, the labels over the training
-data can be found in the `labels_` attribute.
+data can be found in the ``labels_`` attribute.
 
 .. currentmodule:: sklearn.cluster
 
@@ -33,7 +33,7 @@ data can be found in the `labels_` attribute.
 Overview of clustering methods
 ===============================
 
-.. figure:: ../auto_examples/cluster/images/plot_cluster_comparison_1.png
+.. figure:: ../auto_examples/cluster/images/plot_cluster_comparison_001.png
    :target: ../auto_examples/cluster/plot_cluster_comparison.html
    :align: center
    :scale: 50
@@ -53,40 +53,47 @@ Overview of clustering methods
 
    * - :ref:`K-Means <k_means>`
      - number of clusters
-     - Very large `n_samples`, medium `n_clusters` with
+     - Very large ``n_samples``, medium ``n_clusters`` with
        :ref:`MiniBatch code <mini_batch_kmeans>`
-     - General-purpose, even cluster size, flat geometry, not too many clusters 
-     - Distances between points 
+     - General-purpose, even cluster size, flat geometry, not too many clusters
+     - Distances between points
 
    * - :ref:`Affinity propagation <affinity_propagation>`
-     - damping, sample preference 
+     - damping, sample preference
      - Not scalable with n_samples
      - Many clusters, uneven cluster size, non-flat geometry
      - Graph distance (e.g. nearest-neighbor graph)
 
    * - :ref:`Mean-shift <mean_shift>`
-     - bandwidth 
-     - Not scalable with n_samples
+     - bandwidth
+     - Not scalable with ``n_samples``
      - Many clusters, uneven cluster size, non-flat geometry
-     - Distances between points 
+     - Distances between points
 
    * - :ref:`Spectral clustering <spectral_clustering>`
      - number of clusters
-     - Medium `n_samples`, small `n_clusters`
+     - Medium ``n_samples``, small ``n_clusters``
      - Few clusters, even cluster size, non-flat geometry
      - Graph distance (e.g. nearest-neighbor graph)
 
-   * - :ref:`Hierarchical clustering <hierarchical_clustering>`
+   * - :ref:`Ward hierarchical clustering <hierarchical_clustering>`
      - number of clusters
-     - Large `n_samples` and `n_clusters`
+     - Large ``n_samples`` and ``n_clusters``
      - Many clusters, possibly connectivity constraints
-     - Distances between points 
+     - Distances between points
+
+   * - :ref:`Agglomerative clustering <hierarchical_clustering>`
+     - number of clusters, linkage type, distance
+     - Large ``n_samples`` and ``n_clusters``
+     - Many clusters, possibly connectivity constraints, non Euclidean
+       distances
+     - Any pairwise distance
 
    * - :ref:`DBSCAN <dbscan>`
      - neighborhood size
-     - Very large `n_samples`, medium `n_clusters`
+     - Very large ``n_samples``, medium ``n_clusters``
      - Non-flat geometry, uneven cluster sizes
-     - Distances between nearest points 
+     - Distances between nearest points
 
    * - :ref:`Gaussian mixtures <mixture>`
      - many
@@ -111,56 +118,88 @@ K-means
 
 The :class:`KMeans` algorithm clusters data by trying to separate samples
 in n groups of equal variance, minimizing a criterion known as the
-'inertia' of the groups. This algorithm requires the number of cluster to
-be specified. It scales well to large number of samples and has been used
-across a large range of application areas in many different fields. It is
-also equivalent to the expectation-maximization algorithm when setting the
-covariance matrix to be diagonal, equal and small. The K-means algorithm
-aims to choose centroids :math:`C` that minimise the within cluster sum of 
-squares objective function with a dataset :math:`X` with :math:`n` samples:
+`inertia <inertia>` or within-cluster sum-of-squares.
+This algorithm requires the number of clusters to be specified.
+It scales well to large number of samples and has been used
+across a large range of application areas in many different fields.
 
-.. math:: J(X, C) = \sum_{i=0}^{n}\min_{\mu_j \in C}(||x_j - \mu_i||^2)
+The k-means algorithm divides a set of :math:`N` samples :math:`X`
+into :math:`K` disjoint clusters :math:`C`,
+each described by the mean :math:`\mu_j` of the samples in the cluster.
+The means are commonly called the cluster "centroids";
+note that they are not, in general, points from :math:`X`,
+although they live in the same space.
+The K-means algorithm aims to choose centroids
+that minimise the *inertia*, or within-cluster sum of squared criterion:
+
+.. math:: \sum_{i=0}^{n}\min_{\mu_j \in C}(||x_j - \mu_i||^2)
+
+Inertia, or the within-cluster sum of squares criterion,
+can be recognized as a measure of how internally coherent clusters are.
+It suffers from various drawbacks:
+
+- Inertia makes the assumption that clusters are convex and isotropic,
+  which is not always the case. It responds poorly to elongated clusters,
+  or manifolds with irregular shapes.
+
+- Inertia is not a normalized metric: we just know that lower values are
+  better and zero is optimal. But in very high-dimensional spaces, Euclidean
+  distances tend to become inflated
+  (this is an instance of the so-called "curse of dimensionality").
+  Running a dimensionality reduction algorithm such as `PCA <PCA>`
+  prior to k-means clustering can alleviate this problem
+  and speed up the computations.
 
 K-means is often referred to as Lloyd's algorithm. In basic terms, the
 algorithm has three steps. The first step chooses the initial centroids, with
 the most basic method being to choose :math:`k` samples from the dataset
-:math:`X`. After initialization, k-means consists of looping between the other
-two major steps. The first steps assigns each sample to its nearest centroid.
+:math:`X`. After initialization, K-means consists of looping between the
+two other steps. The first step assigns each sample to its nearest centroid.
 The second step creates new centroids by taking the mean value of all of the
 samples assigned to each previous centroid. The difference between the old
-and the new centroids is the inertia and the algorithm repeats these last two
+and the new centroids are computed and the algorithm repeats these last two
 steps until this value is less than a threshold. In other words, it repeats
 until the centroids do not move significantly.
 
-The algorithm can be identified through the concept of `Voronoi diagrams
-<https://en.wikipedia.org/wiki/Voronoi_diagram>`_. First the Voronoi diagram
-of the points is calculated using the current centroids. Each segment in the
+.. image:: ../auto_examples/cluster/images/plot_kmeans_digits_001.png
+   :target: ../auto_examples/cluster/plot_kmeans_digits.html
+   :align: right
+   :scale: 35
+
+K-means is equivalent to the expectation-maximization algorithm
+with a small, all-equal, diagonal covariance matrix.
+
+The algorithm can also be understood through the concept of `Voronoi diagrams
+<https://en.wikipedia.org/wiki/Voronoi_diagram>`_. First the Voronoi diagram of
+the points is calculated using the current centroids. Each segment in the
 Voronoi diagram becomes a separate cluster. Secondly, the centroids are updated
 to the mean of each segment. The algorithm then repeats this until a stopping
-criterion is fulfilled. Usually, as in this implementation, the algorithm stops
-when the relative decrease in the objective function between iterations is less
-than the given tolerance value.
+criterion is fulfilled. Usually, the algorithm stops when the relative decrease
+in the objective function between iterations is less than the given tolerance
+value. This is not the case in this implementation: iteration stops when
+centroids move less than the tolerance.
 
 Given enough time, K-means will always converge, however this may be to a local
-minimum. This is highly dependent on the the initialisation of the centroids.
+minimum. This is highly dependent on the initialization of the centroids.
 As a result, the computation is often done several times, with different
-initialisation of the centroids. One method to help address this issue is the
-k-means++ initialisation algorithm, which has been implemented in
-scikit-learn (use the ``init='kmeans++'`` parameter). This initialises the
-centroids to be (generally) distant from each other, leading to provably better
-results than random initialisation.
+initializations of the centroids. One method to help address this issue is the
+k-means++ initialization scheme, which has been implemented in scikit-learn
+(use the ``init='kmeans++'`` parameter). This initializes the centroids to be
+(generally) distant from each other, leading to provably better results than
+random initialization, as shown in the reference.
 
 A parameter can be given to allow K-means to be run in parallel, called
-`n_jobs`. Giving this parameter a positive value uses that many processors 
-(default=1). A value of -1 uses all processors, with -2 using one less, and so 
-on. Parallelization generally speeds up computation at the cost of memory (in
-this case, multiple copies of centroids need to be stored, one for each job).
+``n_jobs``. Giving this parameter a positive value uses that many processors
+(default: 1). A value of -1 uses all available processors, with -2 using one
+less, and so on. Parallelization generally speeds up computation at the cost of
+memory (in this case, multiple copies of centroids need to be stored, one for
+each job).
 
 .. warning::
 
     The parallel version of K-Means is broken on OS X when numpy uses the
     Accelerate Framework. This is expected behavior: Accelerate can be called
-    after a fork but you need to execv the subprocess with the python binary
+    after a fork but you need to execv the subprocess with the Python binary
     (which multiprocessing does not do under posix).
 
 K-means can be used for vector quantization. This is achieved using the
@@ -170,6 +209,13 @@ transform method of a trained model of :class:`KMeans`.
 
  * :ref:`example_cluster_plot_kmeans_digits.py`: Clustering handwritten digits
 
+.. topic:: References:
+
+ * `"k-means++: The advantages of careful seeding"
+   <http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf>`_
+   Arthur, David, and Sergei Vassilvitskii,
+   *Proceedings of the eighteenth annual ACM-SIAM symposium on Discrete
+   algorithms*, Society for Industrial and Applied Mathematics (2007)
 
 .. _mini_batch_kmeans:
 
@@ -177,14 +223,29 @@ Mini Batch K-Means
 ------------------
 
 The :class:`MiniBatchKMeans` is a variant of the :class:`KMeans` algorithm
-using mini-batches, random subset of the dataset, to compute the centroids.
+which uses mini-batches to reduce the computation time, while still attempting
+to optimise the same objective function. Mini-batches are subsets of the input
+data, randomly sampled in each training iteration. These mini-batches
+drastically reduce the amount of computation required to converge to a local
+solution. In contrast to other algorithms that reduce the convergence time of
+k-means, mini-batch k-means produces results that are generally only slightly
+worse than the standard algorithm.
 
-Although the :class:`MiniBatchKMeans` converge faster than the KMeans
-version, the quality of the results, measured by the inertia, the sum of
-the distance of each points to the nearest centroid, is not as good as
-the :class:`KMeans` algorithm.
+The algorithm iterates between two major steps, similar to vanilla k-means.
+In the first step, :math:`b` samples are drawn randomly from the dataset, to form
+a mini-batch. These are then assigned to the nearest centroid. In the second
+step, the centroids are updated. In contrast to k-means, this is done on a
+per-sample basis. For each sample in the mini-batch, the assigned centroid
+is updated by taking the streaming average of the sample and all previous
+samples assigned to that centroid. This has the effect of decreasing the
+rate of change for a centroid over time. These steps are performed until
+convergence or a predetermined number of iterations is reached.
 
-.. figure:: ../auto_examples/cluster/images/plot_mini_batch_kmeans_1.png
+:class:`MiniBatchKMeans` converges faster than :class:`KMeans`, but the quality
+of the results is reduced. In practice this difference in quality can be quite
+small, as shown in the example and cited reference.
+
+.. figure:: ../auto_examples/cluster/images/plot_mini_batch_kmeans_001.png
    :target: ../auto_examples/cluster/plot_mini_batch_kmeans.html
    :align: center
    :scale: 100
@@ -195,8 +256,10 @@ the :class:`KMeans` algorithm.
  * :ref:`example_cluster_plot_mini_batch_kmeans.py`: Comparison of KMeans and
    MiniBatchKMeans
 
- * :ref:`example_document_clustering.py`: Document clustering using sparse
+ * :ref:`example_text_document_clustering.py`: Document clustering using sparse
    MiniBatchKMeans
+
+ * :ref:`example_cluster_plot_dict_face_patches.py`
 
 
 .. topic:: References:
@@ -208,17 +271,36 @@ the :class:`KMeans` algorithm.
 
 .. _affinity_propagation:
 
-Affinity propagation
+Affinity Propagation
 ====================
 
-:class:`AffinityPropagation` clusters data by diffusion in the similarity
-matrix. This algorithm automatically sets its numbers of cluster. It
-will have difficulties scaling to thousands of samples.
+:class:`AffinityPropagation` creates clusters by sending messages between
+pairs of samples until convergence. A dataset is then described using a small
+number of exemplars, which are identified as those most representative of other
+samples. The messages sent between pairs represent the suitability for one
+sample to be the exemplar of the other, which is updated in response to the
+values from other pairs. This updating happens iteratively until convergence,
+at which point the final exemplars are chosen, and hence the final clustering
+is given.
 
-.. figure:: ../auto_examples/cluster/images/plot_affinity_propagation_1.png
+.. figure:: ../auto_examples/cluster/images/plot_affinity_propagation_001.png
    :target: ../auto_examples/cluster/plot_affinity_propagation.html
    :align: center
    :scale: 50
+
+
+Affinity Propagation can be interesting as it chooses the number of
+clusters based on the data provided. For this purpose, the two important
+parameters are the *preference*, which controls how many exemplars are
+used, and the *damping factor*.
+
+The main drawback of Affinity Propagation is its complexity. The
+algorithm has a time complexity of the order :math:`O(N^2 T)`, where :math:`N`
+is the number of samples and :math:`T` is the number of iterations until
+convergence. Further, the memory complexity is of the order
+:math:`O(N^2)` if a dense similarity matrix is used, but reducible if a
+sparse similarity matrix is used. This makes Affinity Propagation most
+appropriate for small to medium sized datasets.
 
 .. topic:: Examples:
 
@@ -228,19 +310,81 @@ will have difficulties scaling to thousands of samples.
  * :ref:`example_applications_plot_stock_market.py` Affinity Propagation on
    Financial time series to find groups of companies
 
+**Algorithm description:**
+The messages sent between points belong to one of two categories. The first is
+the responsibility :math:`r(i, k)`,
+which is the accumulated evidence that sample :math:`k`
+should be the exemplar for sample :math:`i`.
+The second is the availability :math:`a(i, k)`
+which is the accumulated evidence that sample :math:`i`
+should choose sample :math:`k` to be its exemplar,
+and considers the values for all other samples that :math:`k` should
+be an exemplar. In this way, exemplars are chosen by samples if they are (1)
+similar enough to many samples and (2) chosen by many samples to be
+representative of themselves.
+
+More formally, the responsibility of a sample :math:`k`
+to be the exemplar of sample :math:`i` is given by:
+
+.. math::
+
+    r(i, k) \leftarrow s(i, k) - max [ a(i, \acute{k}) + s(i, \acute{k}) \forall \acute{k} \neq k ]
+
+Where :math:`s(i, k)` is the similarity between samples :math:`i` and :math:`k`.
+The availability of sample :math:`k`
+to be the exemplar of sample :math:`i` is given by:
+
+.. math::
+
+    a(i, k) \leftarrow min [0, r(k, k) + \sum_{\acute{i}~s.t.~\acute{i} \notin \{i, k\}}{r(\acute{i}, k)}]
+
+To begin with, all values for :math:`r` and :math:`a` are set to zero,
+and the calculation of each iterates until convergence.
 
 .. _mean_shift:
 
 Mean Shift
 ==========
+:class:`MeanShift` clustering aims to discover *blobs* in a smooth density of
+samples. It is a centroid based algorithm, which works by updating candidates
+for centroids to be the mean of the points within a given region. These
+candidates are then filtered in a
+post-processing stage to eliminate near-duplicates to form the final set of
+centroids.
 
-:class:`MeanShift` clusters data by estimating *blobs* in a smooth
-density of points matrix. This algorithm automatically sets its numbers
-of cluster. It will have difficulties scaling to thousands of samples.
-The utility function :func:`estimate_bandwidth` can be used to guess
-the optimal bandwidth for :class:`MeanShift` from the data.
+Given a candidate centroid :math:`x_i` for iteration :math:`t`, the candidate
+is updated according to the following equation:
 
-.. figure:: ../auto_examples/cluster/images/plot_mean_shift_1.png
+.. math::
+
+    x_i^{t+1} = x_i^t + m(x_i^t)
+
+Where :math:`N(x_i)` is the neighborhood of samples within a given distance
+around :math:`x_i` and :math:`m` is the *mean shift* vector that is computed
+for each centroid that
+points towards a region of the maximum increase in the density of points. This
+is computed using the following equation, effectively updating a centroid to be
+the mean of the samples within its neighborhood:
+
+.. math::
+
+    m(x_i) = \frac{\sum_{x_j \in N(x_i)}K(x_j - x_i)x_j}{\sum_{x_j \in N(x_i)}K(x_j - x_i)}
+
+The algorithm automatically sets the number of clusters, instead of relying on a
+parameter ``bandwidth``, which dictates the size of the region to search through.
+This parameter can be set manually, but can be estimated using the provided
+``estimate_bandwidth`` function, which is called if the bandwidth is not set.
+
+The algorithm is not highly scalable, as it requires multiple nearest neighbor
+searches during the execution of the algorithm. The algorithm is guaranteed to
+converge, however the algorithm will stop iterating when the change in centroids
+is small.
+
+Labelling a new sample is performed by finding the nearest centroid for a
+given sample.
+
+
+.. figure:: ../auto_examples/cluster/images/plot_mean_shift_001.png
    :target: ../auto_examples/cluster/plot_mean_shift.html
    :align: center
    :scale: 50
@@ -251,6 +395,13 @@ the optimal bandwidth for :class:`MeanShift` from the data.
  * :ref:`example_cluster_plot_mean_shift.py`: Mean Shift clustering
    on a synthetic 2D datasets with 3 classes.
 
+.. topic:: References:
+
+ * `"Mean shift: A robust approach toward feature space analysis."
+   <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.76.8968&rep=rep1&type=pdf>`_
+   D. Comaniciu, & P. Meer *IEEE Transactions on Pattern Analysis and Machine Intelligence* (2002)
+
+
 .. _spectral_clustering:
 
 Spectral clustering
@@ -259,25 +410,25 @@ Spectral clustering
 :class:`SpectralClustering` does a low-dimension embedding of the
 affinity matrix between samples, followed by a KMeans in the low
 dimensional space. It is especially efficient if the affinity matrix is
-sparse and the `pyamg <http://code.google.com/p/pyamg/>`_ module is
-installed. SpectralClustering requires the number of clusters to be
-specified. It works well for a small number of clusters but is not
-advised when using many clusters.
+sparse and the `pyamg <http://pyamg.org/>`_ module is installed.
+SpectralClustering requires the number of clusters to be specified. It
+works well for a small number of clusters but is not advised when using
+many clusters.
 
 For two clusters, it solves a convex relaxation of the `normalised
 cuts <http://www.cs.berkeley.edu/~malik/papers/SM-ncut.pdf>`_ problem on
 the similarity graph: cutting the graph in two so that the weight of the
-edges cut is small compared to the weights in of edges inside each
+edges cut is small compared to the weights of the edges inside each
 cluster. This criteria is especially interesting when working on images:
 graph vertices are pixels, and edges of the similarity graph are a
 function of the gradient of the image.
 
 
-.. |noisy_img| image:: ../auto_examples/cluster/images/plot_segmentation_toy_1.png
+.. |noisy_img| image:: ../auto_examples/cluster/images/plot_segmentation_toy_001.png
     :target: ../auto_examples/cluster/plot_segmentation_toy.html
     :scale: 50
 
-.. |segmented_img| image:: ../auto_examples/cluster/images/plot_segmentation_toy_2.png
+.. |segmented_img| image:: ../auto_examples/cluster/images/plot_segmentation_toy_002.png
     :target: ../auto_examples/cluster/plot_segmentation_toy.html
     :scale: 50
 
@@ -304,28 +455,28 @@ function of the gradient of the image.
  * :ref:`example_cluster_plot_lena_segmentation.py`: Spectral clustering
    to split the image of lena in regions.
 
-.. |lena_kmeans| image:: ../auto_examples/cluster/images/plot_lena_segmentation_1.png
+.. |lena_kmeans| image:: ../auto_examples/cluster/images/plot_lena_segmentation_001.png
     :target: ../auto_examples/cluster/plot_lena_segmentation.html
     :scale: 65
 
-.. |lena_discretize| image:: ../auto_examples/cluster/images/plot_lena_segmentation_2.png
+.. |lena_discretize| image:: ../auto_examples/cluster/images/plot_lena_segmentation_002.png
     :target: ../auto_examples/cluster/plot_lena_segmentation.html
     :scale: 65
 
-Different label assignement strategies
+Different label assignment strategies
 ---------------------------------------
 
-Different label assignement strategies can be used, corresponding to the
-`assign_labels` parameter of :class:`SpectralClustering`.
-The `kmeans` strategie can match finer details of the data, but it can be
-more unstable. In particular, unless you control the `random_state`, it
+Different label assignment strategies can be used, corresponding to the
+``assign_labels`` parameter of :class:`SpectralClustering`.
+The ``"kmeans"`` strategy can match finer details of the data, but it can be
+more unstable. In particular, unless you control the ``random_state``, it
 may not be reproducible from run-to-run, as it depends on a random
-initialization. On the other hand, the `discretize` strategy is 100%
+initialization. On the other hand, the ``"discretize"`` strategy is 100%
 reproducible, but it tends to create parcels of fairly even and
 geometrical shape.
 
 =====================================  =====================================
- `assign_labels="kmeans"`               `assign_labels="discretize"`
+ ``assign_labels="kmeans"`              ``assign_labels="discretize"``
 =====================================  =====================================
 |lena_kmeans|                          |lena_discretize|
 =====================================  =====================================
@@ -356,56 +507,104 @@ Hierarchical clustering
 =======================
 
 Hierarchical clustering is a general family of clustering algorithms that
-build nested clusters by merging them successively. This hierarchy of
-clusters represented as a tree (or dendrogram). The root of the tree is
-the unique cluster that gathers all the samples, the leaves being the
+build nested clusters by merging or splitting them successively. This
+hierarchy of clusters is represented as a tree (or dendrogram). The root of the
+tree is the unique cluster that gathers all the samples, the leaves being the
 clusters with only one sample. See the `Wikipedia page
-<http://en.wikipedia.org/wiki/Hierarchical_clustering>`_ for more
-details.
+<http://en.wikipedia.org/wiki/Hierarchical_clustering>`_ for more details.
 
-The :class:`Ward` object performs a hierarchical clustering based on
-the Ward algorithm, that is a variance-minimizing approach. At each
-step, it minimizes the sum of squared differences within all clusters
-(inertia criterion).
+The :class:`AgglomerativeClustering` object performs a hierarchical clustering
+using a bottom up approach: each observation starts in its own cluster, and
+clusters are successively merged together. The linkage criteria determines the
+metric used for the merge strategy:
 
-This algorithm can scale to large number of samples when it is used jointly
-with an connectivity matrix, but can be computationally expensive when no
-connectivity constraints are added between samples: it considers at each step
-all the possible merges.
+- **Ward** minimizes the sum of squared differences within all clusters. It is a
+  variance-minimizing approach and in this sense is similar to the k-means
+  objective function but tackled with an agglomerative hierarchical
+  approach.
+- **Maximum** or **complete linkage** minimizes the maximum distance between
+  observations of pairs of clusters.
+- **Average linkage** minimizes the average of the distances between all
+  observations of pairs of clusters.
+
+:class:`AgglomerativeClustering` can also scale to large number of samples
+when it is used jointly with a connectivity matrix, but is computationally
+expensive when no connectivity constraints are added between samples: it
+considers at each step all the possible merges.
+
+.. topic:: :class:`FeatureAgglomeration`
+
+   The :class:`FeatureAgglomeration` uses agglomerative clustering to
+   group together features that look very similar, thus decreasing the
+   number of features. It is a dimensionality reduction tool, see
+   :ref:`data_reduction`.
+
+Different linkage type: Ward, complete and average linkage
+-----------------------------------------------------------
+
+:class:`AgglomerativeClustering` supports Ward, average, and complete
+linkage strategies.
+
+.. image:: ../auto_examples/cluster/images/plot_digits_linkage_001.png
+    :target: ../auto_examples/cluster/plot_digits_linkage.html
+    :scale: 43
+
+.. image:: ../auto_examples/cluster/images/plot_digits_linkage_002.png
+    :target: ../auto_examples/cluster/plot_digits_linkage.html
+    :scale: 43
+
+.. image:: ../auto_examples/cluster/images/plot_digits_linkage_003.png
+    :target: ../auto_examples/cluster/plot_digits_linkage.html
+    :scale: 43
+
+
+Agglomerative cluster has a "rich get richer" behavior that leads to
+uneven cluster sizes. In this regard, complete linkage is the worst
+strategy, and Ward gives the most regular sizes. However, the affinity
+(or distance used in clustering) cannot be varied with Ward, thus for non
+Euclidean metrics, average linkage is a good alternative.
+
+.. topic:: Examples:
+
+ * :ref:`example_cluster_plot_digits_linkage.py`: exploration of the
+   different linkage strategies in a real dataset.
 
 
 Adding connectivity constraints
 -------------------------------
 
-An interesting aspect of the :class:`Ward` object is that connectivity
-constraints can be added to this algorithm (only adjacent clusters can be
-merged together), through an connectivity matrix that defines for each
-sample the neighboring samples following a given structure of the data. For
-instance, in the swiss-roll example below, the connectivity constraints
-forbid the merging of points that are not adjacent on the swiss roll, and
-thus avoid forming clusters that extend across overlapping folds of the
-roll.
+An interesting aspect of :class:`AgglomerativeClustering` is that
+connectivity constraints can be added to this algorithm (only adjacent
+clusters can be merged together), through a connectivity matrix that defines
+for each sample the neighboring samples following a given structure of the
+data. For instance, in the swiss-roll example below, the connectivity
+constraints forbid the merging of points that are not adjacent on the swiss
+roll, and thus avoid forming clusters that extend across overlapping folds of
+the roll.
 
-.. |unstructured| image:: ../auto_examples/cluster/images/plot_ward_structured_vs_unstructured_1.png
+.. |unstructured| image:: ../auto_examples/cluster/images/plot_ward_structured_vs_unstructured_001.png
         :target: ../auto_examples/cluster/plot_ward_structured_vs_unstructured.html
         :scale: 49
 
-.. |structured| image:: ../auto_examples/cluster/images/plot_ward_structured_vs_unstructured_2.png
+.. |structured| image:: ../auto_examples/cluster/images/plot_ward_structured_vs_unstructured_002.png
         :target: ../auto_examples/cluster/plot_ward_structured_vs_unstructured.html
         :scale: 49
 
 .. centered:: |unstructured| |structured|
 
+These constraint are useful to impose a certain local structure, but they
+also make the algorithm faster, especially when the number of the samples
+is high.
 
 The connectivity constraints are imposed via an connectivity matrix: a
 scipy sparse matrix that has elements only at the intersection of a row
 and a column with indices of the dataset that should be connected. This
-matrix can be constructed from a-priori information, for instance if you
-wish to cluster web pages, but only merging pages with a link pointing
+matrix can be constructed from a-priori information: for instance, you
+may wish to cluster web pages by only merging pages with a link pointing
 from one to another. It can also be learned from the data, for instance
 using :func:`sklearn.neighbors.kneighbors_graph` to restrict
-merging to nearest neighbors as in the :ref:`swiss roll
-<example_cluster_plot_ward_structured_vs_unstructured.py>` example, or
+merging to nearest neighbors as in :ref:`this example
+<example_cluster_plot_agglomerative_clustering.py>`, or
 using :func:`sklearn.feature_extraction.image.grid_to_graph` to
 enable only merging of neighboring pixels on an image, as in the
 :ref:`Lena <example_cluster_plot_lena_ward_segmentation.py>` example.
@@ -423,24 +622,113 @@ enable only merging of neighboring pixels on an image, as in the
    Example of dimensionality reduction with feature agglomeration based on
    Ward hierarchical clustering.
 
+ * :ref:`example_cluster_plot_agglomerative_clustering.py`
+
+.. warning:: **Connectivity constraints with average and complete linkage**
+
+    Connectivity constraints and complete or average linkage can enhance
+    the 'rich getting richer' aspect of agglomerative clustering,
+    particularly so if they are built with
+    :func:`sklearn.neighbors.kneighbors_graph`. In the limit of a small
+    number of clusters, they tend to give a few macroscopically occupied
+    clusters and almost empty ones. (see the discussion in
+    :ref:`example_cluster_plot_agglomerative_clustering.py`).
+
+.. image:: ../auto_examples/cluster/images/plot_agglomerative_clustering_001.png
+    :target: ../auto_examples/cluster/plot_agglomerative_clustering.html
+    :scale: 38
+
+.. image:: ../auto_examples/cluster/images/plot_agglomerative_clustering_002.png
+    :target: ../auto_examples/cluster/plot_agglomerative_clustering.html
+    :scale: 38
+
+.. image:: ../auto_examples/cluster/images/plot_agglomerative_clustering_003.png
+    :target: ../auto_examples/cluster/plot_agglomerative_clustering.html
+    :scale: 38
+
+.. image:: ../auto_examples/cluster/images/plot_agglomerative_clustering_004.png
+    :target: ../auto_examples/cluster/plot_agglomerative_clustering.html
+    :scale: 38
+
+
+Varying the metric
+-------------------
+
+Average and complete linkage can be used with a variety of distances (or
+affinities), in particular Euclidean distance (*l2*), Manhattan distance
+(or Cityblock, or *l1*), cosine distance, or any precomputed affinity
+matrix.
+
+* *l1* distance is often good for sparse features, or sparse noise: ie
+  many of the features are zero, as in text mining using occurences of
+  rare words.
+
+* *cosine* distance is interesting because it is invariant to global
+  scalings of the signal.
+
+The guidelines for choosing a metric is to use one that maximizes the
+distance between samples in different classes, and minimizes that within
+each class.
+
+.. image:: ../auto_examples/cluster/images/plot_agglomerative_clustering_metrics_005.png
+    :target: ../auto_examples/cluster/plot_agglomerative_clustering_metrics.html
+    :scale: 32
+
+.. image:: ../auto_examples/cluster/images/plot_agglomerative_clustering_metrics_006.png
+    :target: ../auto_examples/cluster/plot_agglomerative_clustering_metrics.html
+    :scale: 32
+
+.. image:: ../auto_examples/cluster/images/plot_agglomerative_clustering_metrics_007.png
+    :target: ../auto_examples/cluster/plot_agglomerative_clustering_metrics.html
+    :scale: 32
+
+.. topic:: Examples:
+
+ * :ref:`example_cluster_plot_agglomerative_clustering_metrics.py`
+
+
 .. _dbscan:
 
 DBSCAN
 ======
 
-The :class:`DBSCAN` algorithm clusters data by finding core points which have
-many neighbours within a given radius. After a core point is found, the cluster
-is expanded by adding its neighbours to the current cluster and recursively
-checking if any are core points. Formally, a point is considered a core point
-if it has more than min_points points which are of a similarity greater than
-the given threshold eps. This is shown in the figure below, where the color
-indicates cluster membership and large circles indicate core points found by
-the algorithm. Moreover, the algorithm can detect outliers, indicated by black
-points below. The outliers are defined as points which do not belong to
-any current cluster and do not have enough close neighbours to start a
-new cluster.
+The :class:`DBSCAN` algorithm views clusters as areas of high density
+separated by areas of low density. Due to this rather generic view, clusters
+found by DBSCAN can be any shape, as opposed to k-means which assumes that
+clusters are convex shaped. The central component to the DBSCAN is the concept
+of *core samples*, which are samples that are in areas of high density. A
+cluster is therefore a set of core samples, each close to each other
+(measured by some distance measure)
+and a set of non-core samples that are close to a core sample (but are not
+themselves core samples). There are two parameters to the algorithm,
+``min_samples`` and ``eps``,
+which define formally what we mean when we say *dense*.
+Higher ``min_samples`` or lower ``eps``
+indicate higher density necessary to form a cluster.
 
-.. |dbscan_results| image:: ../auto_examples/cluster/images/plot_dbscan_1.png
+More formally, we define a core sample as being a sample in the dataset such
+that there exist ``min_samples`` other samples within a distance of
+``eps``, which are defined as *neighbors* of the core sample. This tells
+us that the core sample is in a dense area of the vector space. A cluster
+is a set of core samples, that can be built by recursively by taking a core
+sample, finding all of its neighbors that are core samples, finding all of
+*their* neighbors that are core samples, and so on. A cluster also has a
+set of non-core samples, which are samples that are neighbors of a core sample
+in the cluster but are not themselves core samples. Intuitively, these samples
+are on the fringes of a cluster.
+
+Any core sample is part of a cluster, by definition. Further, any cluster has
+at least ``min_samples`` points in it, following the definition of a core
+sample. For any sample that is not a core sample, and does have a
+distance higher than ``eps`` to any core sample, it is considered an outlier by
+the algorithm.
+
+In the figure below, the color indicates cluster membership, with large circles
+indicating core samples found by the algorithm. Smaller circles are non-core
+samples that are still part of a cluster. Moreover, the outliers are indicated
+by black points below.
+
+.. |dbscan_results| image:: ../auto_examples/cluster/images/plot_dbscan_001.png
         :target: ../auto_examples/cluster/plot_dbscan.html
         :scale: 50
 
@@ -448,7 +736,28 @@ new cluster.
 
 .. topic:: Examples:
 
- * :ref:`example_cluster_plot_dbscan.py`: Clustering synthetic data with DBSCAN
+    * :ref:`example_cluster_plot_dbscan.py`
+
+.. topic:: Implementation
+
+    The algorithm is non-deterministic, but the core samples will
+    always belong to the same clusters (although the labels may be
+    different). The non-determinism comes from deciding to which cluster a
+    non-core sample belongs. A non-core sample can have a distance lower
+    than ``eps`` to two core samples in different clusters. By the
+    triangular inequality, those two core samples must be more distant than
+    ``eps`` from each other, or they would be in the same cluster. The non-core
+    sample is assigned to whichever cluster is generated first, where
+    the order is determined randomly. Other than the ordering of
+    the dataset, the algorithm is deterministic, making the results relatively
+    stable between runs on the same data.
+
+    The current implementation uses ball trees and kd-trees
+    to determine the neighborhood of points,
+    which avoids calculating the full distance matrix
+    (as was done in scikit-learn versions before 0.14).
+    The possibility to use custom metrics is retained;
+    for details, see :class:`NearestNeighbors`.
 
 .. topic:: References:
 
@@ -474,33 +783,6 @@ classes according to some similarity metric.
 
 .. currentmodule:: sklearn.metrics
 
-Inertia
--------
-
-Presentation and usage
-~~~~~~~~~~~~~~~~~~~~~~
-
-TODO: factorize inertia computation out of kmeans and then write me!
-
-
-Advantages
-~~~~~~~~~~
-
-- No need for the ground truth knowledge of the "real" classes.
-
-Drawbacks
-~~~~~~~~~
-
-- Inertia makes the assumption that clusters are convex and isotropic
-  which is not always the case especially of the clusters are manifolds
-  with weird shapes: for instance inertia is a useless metrics to evaluate
-  clustering algorithm that tries to identify nested circles on a 2D plane.
-
-- Inertia is not a normalized metrics: we just know that lower values are
-  better and bounded by zero. One potential solution would be to adjust
-  inertia for random clustering (assuming the number of ground truth classes
-  is known).
-
 
 Adjusted Rand index
 -------------------
@@ -521,7 +803,7 @@ chance normalization**::
   >>> metrics.adjusted_rand_score(labels_true, labels_pred)  # doctest: +ELLIPSIS
   0.24...
 
-One can permute 0 and 1 in the predicted labels and rename `2` by `3` and get
+One can permute 0 and 1 in the predicted labels, rename 2 to 3, and get
 the same score::
 
   >>> labels_pred = [1, 1, 0, 0, 3, 3]
@@ -644,7 +926,7 @@ proposed more recently and is **normalized against chance**::
   >>> metrics.adjusted_mutual_info_score(labels_true, labels_pred)  # doctest: +ELLIPSIS
   0.22504...
 
-One can permute 0 and 1 in the predicted labels and rename `2` by `3` and get
+One can permute 0 and 1 in the predicted labels, rename 2 to 3 and get
 the same score::
 
   >>> labels_pred = [1, 1, 0, 0, 3, 3]
@@ -718,32 +1000,30 @@ Drawbacks
 
  * :ref:`example_cluster_plot_adjusted_for_chance_measures.py`: Analysis of
    the impact of the dataset size on the value of clustering measures
-   for random assignments. This example also includes the Adjusted Rand 
+   for random assignments. This example also includes the Adjusted Rand
    Index.
 
 
 Mathematical formulation
 ~~~~~~~~~~~~~~~~~~~~~~~~
-Assume two label assignments (of the same data), :math:`U` with :math:`R`
-classes and :math:`V` with :math:`C` classes. The entropy of either is the
-amount of uncertaintly for an array, and can be calculated as:
 
-.. math:: H(U) = \sum_{i=1}^{|R|}P(i)\log(P(i))
+Assume two label assignments (of the same N objects), :math:`U` and :math:`V`.
+Their entropy is the amount of uncertainty for a partition set, defined by:
 
-Where P(i) is the number of instances in U that are in class :math:`R_i`.
-Likewise, for :math:`V`:
+.. math:: H(U) = \sum_{i=1}^{|U|}P(i)\log(P(i))
 
-.. math:: H(V) = \sum_{j=1}^{|C|}P'(j)\log(P'(j))
+where :math:`P(i) = |U_i| / N` is the probability that an object picked at
+random from :math:`U` falls into class :math:`U_i`. Likewise for :math:`V`:
 
-Where P'(j) is the number of instances in V that are in class :math:`C_j`.
+.. math:: H(V) = \sum_{j=1}^{|V|}P'(j)\log(P'(j))
 
-The mutual information between :math:`U` and :math:`V` is
-calculated by:
+With :math:`P'(j) = |V_j| / N`. The mutual information (MI) between :math:`U`
+and :math:`V` is calculated by:
 
-.. math:: \text{MI}(U, V) = \sum_{i=1}^{|R|}\sum_{j=1}^{|C|}P(i, j)\log\left(\frac{P(i,j)}{P(i)P'(j)}\right)
+.. math:: \text{MI}(U, V) = \sum_{i=1}^{|U|}\sum_{j=1}^{|V|}P(i, j)\log\left(\frac{P(i,j)}{P(i)P'(j)}\right)
 
-Where P(i, j) is the number of instances with label :math:`R_i` 
-and also with label :math:`C_j`.
+where :math:`P(i, j) = |U_i \cap V_j| / N` is the probability that an object
+picked at random falls into both classes :math:`U_i` and :math:`V_j`.
 
 The normalized mutual information is defined as
 
@@ -756,16 +1036,16 @@ between the label assignments.
 
 The expected value for the mutual information can be calculated using the
 following equation, from Vinh, Epps, and Bailey, (2009). In this equation,
-:math:`a_i` is the number of instances with label :math:`U_i` and
-:math:`b_j` is the number of instances with label :math:`V_j`.
+:math:`a_i = |U_i|` (the number of elements in :math:`U_i`) and
+:math:`b_j = |V_j|` (the number of elements in :math:`V_j`).
 
 
-.. math:: E[\text{MI}(U,V)]=\sum_{i=1}^R \sum_{j=1}^C \sum_{n_{ij}=(a_i+b_j-N)^+
+.. math:: E[\text{MI}(U,V)]=\sum_{i=1}^|U| \sum_{j=1}^|V| \sum_{n_{ij}=(a_i+b_j-N)^+
    }^{\min(a_i, b_j)} \frac{n_{ij}}{N}\log \left( \frac{ N.n_{ij}}{a_i b_j}\right)
    \frac{a_i!b_j!(N-a_i)!(N-b_j)!}{N!n_{ij}!(a_i-n_{ij})!(b_j-n_{ij})!
    (N-a_i-b_j+n_{ij})!}
 
-Using the expected value, the adjusted mutual information can then be 
+Using the expected value, the adjusted mutual information can then be
 calculated using a similar form to that of the adjusted Rand index:
 
 .. math:: \text{AMI} = \frac{\text{MI} - E[\text{MI}]}{\max(H(U), H(V)) - E[\text{MI}]}
@@ -776,7 +1056,7 @@ calculated using a similar form to that of the adjusted Rand index:
    knowledge reuse framework for combining multiple partitions". Journal of
    Machine Learning Research 3: 583–617. doi:10.1162/153244303321897735
 
- * Vinh, Epps, and Bailey, (2009). "Information theoretic measures 
+ * Vinh, Epps, and Bailey, (2009). "Information theoretic measures
    for clusterings comparison". Proceedings of the 26th Annual International
    Conference on Machine Learning - ICML '09.
    doi:10.1145/1553374.1553511. ISBN 9781605585161.
@@ -833,14 +1113,14 @@ Their harmonic mean called **V-measure** is computed by
 The V-measure is actually equivalent to the mutual information (NMI)
 discussed above normalized by the sum of the label entropies [B2011]_.
 
-Homogeneity, completensess and V-measure can be computed at once using
+Homogeneity, completeness and V-measure can be computed at once using
 :func:`homogeneity_completeness_v_measure` as follows::
 
   >>> metrics.homogeneity_completeness_v_measure(labels_true, labels_pred)
   ...                                                      # doctest: +ELLIPSIS
   (0.66..., 0.42..., 0.51...)
 
-The following clustering assignment is slighlty better, since it is
+The following clustering assignment is slightly better, since it is
 homogeneous but not complete::
 
   >>> labels_pred = [0, 0, 0, 1, 2, 2]
@@ -866,7 +1146,7 @@ Advantages
 
 - Intuitive interpretation: clustering with bad V-measure can be
   **qualitatively analyzed in terms of homogeneity and completeness**
-  to better feel what 'kind' of mistakes is done by the assigmenent.
+  to better feel what 'kind' of mistakes is done by the assignment.
 
 - **No assumption is made on the cluster structure**: can be used
   to compare clustering algorithms such as k-means which assumes isotropic
@@ -877,8 +1157,8 @@ Advantages
 Drawbacks
 ~~~~~~~~~
 
-- The previously introduced metrics are **not normalized w.r.t. random
-  labeling**: this means that depending on the number of samples,
+- The previously introduced metrics are **not normalized with regards to
+  random labeling**: this means that depending on the number of samples,
   clusters and ground truth classes, a completely random labeling will
   not always yield the same values for homogeneity, completeness and
   hence v-measure. In particular **random labeling won't yield zero
@@ -889,7 +1169,7 @@ Drawbacks
   smaller sample sizes or larger number of clusters it is safer to use
   an adjusted index such as the Adjusted Rand Index (ARI)**.
 
-.. figure:: ../auto_examples/cluster/images/plot_adjusted_for_chance_measures_1.png
+.. figure:: ../auto_examples/cluster/images/plot_adjusted_for_chance_measures_001.png
    :target: ../auto_examples/cluster/plot_adjusted_for_chance_measures.html
    :align: center
    :scale: 100
@@ -941,12 +1221,12 @@ mean of homogeneity and completeness**:
 .. topic:: References
 
  .. [RH2007] `V-Measure: A conditional entropy-based external cluster evaluation
-   measure <http://acl.ldc.upenn.edu/D/D07/D07-1043.pdf>`_
+   measure <http://aclweb.org/anthology/D/D07/D07-1043.pdf>`_
    Andrew Rosenberg and Julia Hirschberg, 2007
 
  .. [B2011] `Identication and Characterization of Events in Social Media
    <http://www.cs.columbia.edu/~hila/hila-thesis-distributed.pdf>`_, Hila
-   Becker, PhD Thesis. 
+   Becker, PhD Thesis.
 
 .. _silhouette_coefficient:
 
@@ -974,7 +1254,7 @@ The Silhoeutte Coefficient *s* for a single sample is then given as:
 
 .. math:: s = \frac{b - a}{max(a, b)}
 
-The Silhouette Coefficient for a set of samples is given as the mean of the 
+The Silhouette Coefficient for a set of samples is given as the mean of the
 Silhouette Coefficient for each sample.
 
 
@@ -992,7 +1272,7 @@ cluster analysis.
   >>> from sklearn.cluster import KMeans
   >>> kmeans_model = KMeans(n_clusters=3, random_state=1).fit(X)
   >>> labels = kmeans_model.labels_
-  >>> metrics.silhouette_score(X, labels, metric='euclidean')  
+  >>> metrics.silhouette_score(X, labels, metric='euclidean')
   ...                                                      # doctest: +ELLIPSIS
   0.55...
 

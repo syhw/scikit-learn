@@ -3,8 +3,8 @@
 Outlier detection with several methods.
 ==========================================
 
-This example illustrates two ways of performing :ref:`outlier_detection`
-when the amount of contamination is known:
+When the amount of contamination is known, this example illustrates two
+different ways of performing :ref:`outlier_detection`:
 
 - based on a robust estimator of covariance, which is assuming that the
   data are Gaussian distributed and performs better than the One-Class SVM
@@ -23,10 +23,10 @@ Thus rather than using the 'predict' method of the objects, we set the
 threshold on the decision_function to separate out the corresponding
 fraction.
 """
-print __doc__
+print(__doc__)
 
 import numpy as np
-import pylab as pl
+import matplotlib.pyplot as plt
 import matplotlib.font_manager
 from scipy import stats
 
@@ -42,8 +42,7 @@ clusters_separation = [0, 1, 2]
 classifiers = {
     "One-Class SVM": svm.OneClassSVM(nu=0.95 * outliers_fraction + 0.05,
                                      kernel="rbf", gamma=0.1),
-    "robust covariance estimator": EllipticEnvelope(contamination=.1),
-    }
+    "robust covariance estimator": EllipticEnvelope(contamination=.1)}
 
 # Compare given classifiers under given settings
 xx, yy = np.meshgrid(np.linspace(-7, 7, 500), np.linspace(-7, 7, 500))
@@ -63,8 +62,8 @@ for i, offset in enumerate(clusters_separation):
     X = np.r_[X, np.random.uniform(low=-6, high=6, size=(n_outliers, 2))]
 
     # Fit the model with the One-Class SVM
-    pl.figure(figsize=(10, 5))
-    for i, (clf_name, clf) in enumerate(classifiers.iteritems()):
+    plt.figure(figsize=(10, 5))
+    for i, (clf_name, clf) in enumerate(classifiers.items()):
         # fit the data and tag outliers
         clf.fit(X)
         y_pred = clf.decision_function(X).ravel()
@@ -75,10 +74,10 @@ for i, offset in enumerate(clusters_separation):
         # plot the levels lines and the points
         Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()])
         Z = Z.reshape(xx.shape)
-        subplot = pl.subplot(1, 2, i + 1)
+        subplot = plt.subplot(1, 2, i + 1)
         subplot.set_title("Outlier detection")
         subplot.contourf(xx, yy, Z, levels=np.linspace(Z.min(), threshold, 7),
-                cmap=pl.cm.Blues_r)
+                         cmap=plt.cm.Blues_r)
         a = subplot.contour(xx, yy, Z, levels=[threshold],
                             linewidths=2, colors='red')
         subplot.contourf(xx, yy, Z, levels=[threshold, Z.max()],
@@ -93,6 +92,6 @@ for i, offset in enumerate(clusters_separation):
         subplot.set_xlabel("%d. %s (errors: %d)" % (i + 1, clf_name, n_errors))
         subplot.set_xlim((-7, 7))
         subplot.set_ylim((-7, 7))
-    pl.subplots_adjust(0.04, 0.1, 0.96, 0.94, 0.1, 0.26)
+    plt.subplots_adjust(0.04, 0.1, 0.96, 0.94, 0.1, 0.26)
 
-pl.show()
+plt.show()

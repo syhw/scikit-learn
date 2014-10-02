@@ -8,16 +8,17 @@
 The :mod:`sklearn.hmm` module implements hidden Markov models.
 
 **Warning:** :mod:`sklearn.hmm` is orphaned, undocumented and has known
-numerical stability issues. If nobody volunteers to write documentation and
-make it more stable, this module will be removed in version 0.11.
+numerical stability issues. This module will be removed in version 0.17.
+
+It has been moved to a separate repository:
+https://github.com/hmmlearn/hmmlearn
 """
 
 import string
-import warnings
 
 import numpy as np
 
-from .utils import check_random_state
+from .utils import check_random_state, deprecated
 from .utils.extmath import logsumexp
 from .base import BaseEstimator
 from .mixture import (
@@ -38,8 +39,15 @@ NEGINF = -np.inf
 decoder_algorithms = ("viterbi", "map")
 
 
+@deprecated("WARNING: The HMM module and its functions will be removed in 0.17 "
+            "as it no longer falls within the project's scope and API. "
+            "It has been moved to a separate repository: "
+            "https://github.com/hmmlearn/hmmlearn")
 def normalize(A, axis=None):
     """ Normalize the input array so that it sums to 1.
+
+    WARNING: The HMM module and its functions will be removed in 0.17
+    as it no longer falls within the project's scope and API.
 
     Parameters
     ----------
@@ -66,6 +74,10 @@ def normalize(A, axis=None):
     return A / Asum
 
 
+@deprecated("WARNING: The HMM module and its function will be removed in 0.17"
+            "as it no longer falls within the project's scope and API. "
+            "It has been moved to a separate repository: "
+            "https://github.com/hmmlearn/hmmlearn")
 class _BaseHMM(BaseEstimator):
     """Hidden Markov Model base class.
 
@@ -75,6 +87,11 @@ class _BaseHMM(BaseEstimator):
 
     See the instance documentation for details specific to a
     particular object.
+
+    .. warning::
+
+       The HMM module and its functions will be removed in 0.17
+       as it no longer falls within the project's scope and API.
 
     Attributes
     ----------
@@ -108,14 +125,16 @@ class _BaseHMM(BaseEstimator):
     params : string, optional
         Controls which parameters are updated in the training
         process.  Can contain any combination of 's' for startprob,
-        't' for transmat, 'm' for means, and 'c' for covars, etc.
-        Defaults to all parameters.
+        't' for transmat, and other characters for subclass-specific
+        emmission parameters. Defaults to all parameters.
+
 
     init_params : string, optional
         Controls which parameters are initialized prior to
         training.  Can contain any combination of 's' for
-        startprob, 't' for transmat, 'm' for means, and 'c' for
-        covars, etc.  Defaults to all parameters.
+        startprob, 't' for transmat, and other characters for
+        subclass-specific emmission parameters. Defaults to all
+        parameters.
 
     See Also
     --------
@@ -131,7 +150,7 @@ class _BaseHMM(BaseEstimator):
     # which depend on the specific emission distribution.
     #
     # Subclasses will probably also want to implement properties for
-    # the emission distribution parameters to expose them publically.
+    # the emission distribution parameters to expose them publicly.
 
     def __init__(self, n_components=1, startprob=None, transmat=None,
                  startprob_prior=None, transmat_prior=None,
@@ -151,23 +170,24 @@ class _BaseHMM(BaseEstimator):
         self._algorithm = algorithm
         self.random_state = random_state
 
-    def eval(self, obs):
-        """Compute the log probability under the model and compute posteriors
+    def eval(self, X):
+        return self.score_samples(X)
 
-        Implements rank and beam pruning in the forward-backward
-        algorithm to speed up inference in large models.
+    def score_samples(self, obs):
+        """Compute the log probability under the model and compute posteriors.
 
         Parameters
         ----------
         obs : array_like, shape (n, n_features)
-            Sequence of n_features-dimensional data points.  Each row
+            Sequence of n_features-dimensional data points. Each row
             corresponds to a single point in the sequence.
 
         Returns
         -------
         logprob : float
-            Log likelihood of the sequence `obs`
-        posteriors: array_like, shape (n, n_components)
+            Log likelihood of the sequence ``obs``.
+
+        posteriors : array_like, shape (n, n_components)
             Posterior probabilities of each state for each
             observation
 
@@ -202,11 +222,13 @@ class _BaseHMM(BaseEstimator):
         Returns
         -------
         logprob : float
-            Log likelihood of the `obs`
+            Log likelihood of the ``obs``.
 
         See Also
         --------
-        eval : Compute the log probability under the model and posteriors
+        score_samples : Compute the log probability under the model and
+            posteriors
+
         decode : Find most likely state sequence corresponding to a `obs`
         """
         obs = np.asarray(obs)
@@ -215,26 +237,29 @@ class _BaseHMM(BaseEstimator):
         return logprob
 
     def _decode_viterbi(self, obs):
-        """Find most likely state sequence corresponding to `obs`.
+        """Find most likely state sequence corresponding to ``obs``.
 
         Uses the Viterbi algorithm.
 
         Parameters
         ----------
         obs : array_like, shape (n, n_features)
-            List of n_features-dimensional data points.  Each row
-            corresponds to a single data point.
+            Sequence of n_features-dimensional data points. Each row
+            corresponds to a single point in the sequence.
 
         Returns
         -------
         viterbi_logprob : float
-            Log probability of the maximum likelihood path through the HMM
+            Log probability of the maximum likelihood path through the HMM.
+
         state_sequence : array_like, shape (n,)
-            Index of the most likely states for each observation
+            Index of the most likely states for each observation.
 
         See Also
         --------
-        eval : Compute the log probability under the model and posteriors
+        score_samples : Compute the log probability under the model and
+            posteriors.
+
         score : Compute the log probability under the model
         """
         obs = np.asarray(obs)
@@ -250,8 +275,8 @@ class _BaseHMM(BaseEstimator):
         Parameters
         ----------
         obs : array_like, shape (n, n_features)
-            List of n_features-dimensional data points.  Each row
-            corresponds to a single data point.
+            Sequence of n_features-dimensional data points. Each row
+            corresponds to a single point in the sequence.
 
         Returns
         -------
@@ -262,23 +287,24 @@ class _BaseHMM(BaseEstimator):
 
         See Also
         --------
-        eval : Compute the log probability under the model and posteriors
-        score : Compute the log probability under the model
+        score_samples : Compute the log probability under the model and
+            posteriors.
+        score : Compute the log probability under the model.
         """
-        _, posteriors = self.eval(obs)
+        _, posteriors = self.score_samples(obs)
         state_sequence = np.argmax(posteriors, axis=1)
         map_logprob = np.max(posteriors, axis=1).sum()
         return map_logprob, state_sequence
 
     def decode(self, obs, algorithm="viterbi"):
-        """Find most likely state sequence corresponding to `obs`.
+        """Find most likely state sequence corresponding to ``obs``.
         Uses the selected algorithm for decoding.
 
         Parameters
         ----------
         obs : array_like, shape (n, n_features)
-            List of n_features-dimensional data points.  Each row
-            corresponds to a single data point.
+            Sequence of n_features-dimensional data points. Each row
+            corresponds to a single point in the sequence.
 
         algorithm : string, one of the `decoder_algorithms`
             decoder algorithm to be used
@@ -287,13 +313,16 @@ class _BaseHMM(BaseEstimator):
         -------
         logprob : float
             Log probability of the maximum likelihood path through the HMM
+
         state_sequence : array_like, shape (n,)
             Index of the most likely states for each observation
 
         See Also
         --------
-        eval : Compute the log probability under the model and posteriors
-        score : Compute the log probability under the model
+        score_samples : Compute the log probability under the model and
+            posteriors.
+
+        score : Compute the log probability under the model.
         """
         if self._algorithm in decoder_algorithms:
             algorithm = self._algorithm
@@ -310,8 +339,8 @@ class _BaseHMM(BaseEstimator):
         Parameters
         ----------
         obs : array_like, shape (n, n_features)
-            List of n_features-dimensional data points.  Each row
-            corresponds to a single data point.
+            Sequence of n_features-dimensional data points. Each row
+            corresponds to a single point in the sequence.
 
         Returns
         -------
@@ -327,15 +356,15 @@ class _BaseHMM(BaseEstimator):
         Parameters
         ----------
         obs : array_like, shape (n, n_features)
-            List of n_features-dimensional data points.  Each row
-            corresponds to a single data point.
+            Sequence of n_features-dimensional data points. Each row
+            corresponds to a single point in the sequence.
 
         Returns
         -------
         T : array-like, shape (n, n_components)
             Returns the probability of the sample for each state in the model.
         """
-        _, posteriors = self.eval(obs)
+        _, posteriors = self.score_samples(obs)
         return posteriors
 
     def sample(self, n=1, random_state=None):
@@ -372,52 +401,38 @@ class _BaseHMM(BaseEstimator):
         obs = [self._generate_sample_from_state(
             currstate, random_state=random_state)]
 
-        for _ in xrange(n - 1):
+        for _ in range(n - 1):
             rand = random_state.rand()
             currstate = (transmat_cdf[currstate] > rand).argmax()
             hidden_states.append(currstate)
             obs.append(self._generate_sample_from_state(
-                                currstate, random_state=random_state))
+                currstate, random_state=random_state))
 
         return np.array(obs), np.array(hidden_states, dtype=int)
 
-    def fit(self, obs, **kwargs):
+    def fit(self, obs):
         """Estimate model parameters.
 
         An initialization step is performed before entering the EM
-        algorithm. If you want to avoid this step, set the keyword
-        argument init_params to the empty string ''. Likewise, if you
-        would like just to do an initialization, call this method with
-        n_iter=0.
+        algorithm. If you want to avoid this step, pass proper
+        ``init_params`` keyword argument to estimator's constructor.
 
         Parameters
         ----------
         obs : list
-            List of array-like observation sequences (shape (n_i, n_features)).
+            List of array-like observation sequences, each of which
+            has shape (n_i, n_features), where n_i is the length of
+            the i_th observation.
 
         Notes
         -----
         In general, `logprob` should be non-decreasing unless
         aggressive pruning is used.  Decreasing `logprob` is generally
         a sign of overfitting (e.g. a covariance parameter getting too
-        small).  You can fix this by getting more training data, or
-        decreasing `covars_prior`.
-
-        **Please note that setting parameters in the `fit` method is
-        deprecated and will be removed in the next release.
-        Set it on initialization instead.**
+        small).  You can fix this by getting more training data,
+        or strengthening the appropriate subclass-specific regularization
+        parameter.
         """
-
-        if kwargs:
-            warnings.warn("Setting parameters in the 'fit' method is"
-                          "deprecated and will be removed in 0.14. Set it on "
-                          "initialization instead.", DeprecationWarning,
-                          stacklevel=2)
-            # initialisations for in case the user still adds parameters to fit
-            # so things don't break
-            for name in ('n_iter', 'thresh', 'params', 'init_params'):
-                if name in kwargs:
-                    setattr(self, name, kwargs[name])
 
         if self.algorithm not in decoder_algorithms:
             self._algorithm = "viterbi"
@@ -425,7 +440,7 @@ class _BaseHMM(BaseEstimator):
         self._init(obs, self.init_params)
 
         logprob = []
-        for i in xrange(self.n_iter):
+        for i in range(self.n_iter):
             # Expectation step
             stats = self._initialize_sufficient_statistics()
             curr_logprob = 0
@@ -492,7 +507,7 @@ class _BaseHMM(BaseEstimator):
     def _set_transmat(self, transmat):
         if transmat is None:
             transmat = np.tile(1.0 / self.n_components,
-                    (self.n_components, self.n_components))
+                               (self.n_components, self.n_components))
 
         # check if there exists a component whose value is exactly zero
         # if so, add a small number and re-normalize
@@ -501,8 +516,8 @@ class _BaseHMM(BaseEstimator):
 
         if (np.asarray(transmat).shape
                 != (self.n_components, self.n_components)):
-            raise ValueError('transmat must have shape ' +
-                    '(n_components, n_components)')
+            raise ValueError('transmat must have shape '
+                             '(n_components, n_components)')
         if not np.all(np.allclose(np.sum(transmat, axis=1), 1.0)):
             raise ValueError('Rows of transmat must sum to 1.0')
 
@@ -515,8 +530,8 @@ class _BaseHMM(BaseEstimator):
     def _do_viterbi_pass(self, framelogprob):
         n_observations, n_components = framelogprob.shape
         state_sequence, logprob = _hmmc._viterbi(
-                n_observations, n_components, self._log_startprob,
-                self._log_transmat, framelogprob)
+            n_observations, n_components, self._log_startprob,
+            self._log_transmat, framelogprob)
         return logprob, state_sequence
 
     def _do_forward_pass(self, framelogprob):
@@ -524,16 +539,15 @@ class _BaseHMM(BaseEstimator):
         n_observations, n_components = framelogprob.shape
         fwdlattice = np.zeros((n_observations, n_components))
         _hmmc._forward(n_observations, n_components, self._log_startprob,
-                self._log_transmat, framelogprob, fwdlattice)
+                       self._log_transmat, framelogprob, fwdlattice)
         fwdlattice[fwdlattice <= ZEROLOGPROB] = NEGINF
         return logsumexp(fwdlattice[-1]), fwdlattice
 
     def _do_backward_pass(self, framelogprob):
         n_observations, n_components = framelogprob.shape
         bwdlattice = np.zeros((n_observations, n_components))
-        _hmmc._backward(n_observations, n_components,
-                self._log_startprob, self._log_transmat,
-                framelogprob, bwdlattice)
+        _hmmc._backward(n_observations, n_components, self._log_startprob,
+                        self._log_transmat, framelogprob, bwdlattice)
 
         bwdlattice[bwdlattice <= ZEROLOGPROB] = NEGINF
 
@@ -567,13 +581,15 @@ class _BaseHMM(BaseEstimator):
             stats['start'] += posteriors[0]
         if 't' in params:
             n_observations, n_components = framelogprob.shape
-            lneta = np.zeros((n_observations - 1,
-                        n_components, n_components))
-            lnP = logsumexp(fwdlattice[-1])
-            _hmmc._compute_lneta(n_observations, n_components,
-                    fwdlattice, self._log_transmat, bwdlattice,
-                    framelogprob, lnP, lneta)
-            stats["trans"] += np.exp(logsumexp(lneta, 0))
+            # when the sample is of length 1, it contains no transitions
+            # so there is no reason to update our trans. matrix estimate
+            if n_observations > 1:
+                lneta = np.zeros((n_observations - 1, n_components, n_components))
+                lnP = logsumexp(fwdlattice[-1])
+                _hmmc._compute_lneta(n_observations, n_components, fwdlattice,
+                                     self._log_transmat, bwdlattice, framelogprob,
+                                     lnP, lneta)
+                stats['trans'] += np.exp(np.minimum(logsumexp(lneta, 0), 700))
 
     def _do_mstep(self, stats, params):
         # Based on Huang, Acero, Hon, "Spoken Language Processing",
@@ -599,6 +615,11 @@ class GaussianHMM(_BaseHMM):
     Representation of a hidden Markov model probability distribution.
     This class allows for easy evaluation of, sampling from, and
     maximum-likelihood estimation of the parameters of a HMM.
+
+    .. warning::
+
+       The HMM module and its functions will be removed in 0.17
+       as it no longer falls within the project's scope and API.
 
     Parameters
     ----------
@@ -652,14 +673,14 @@ class GaussianHMM(_BaseHMM):
     params : string, optional
         Controls which parameters are updated in the training
         process.  Can contain any combination of 's' for startprob,
-        't' for transmat, 'm' for means, and 'c' for covars, etc.
+        't' for transmat, 'm' for means, and 'c' for covars.
         Defaults to all parameters.
 
     init_params : string, optional
         Controls which parameters are initialized prior to
         training.  Can contain any combination of 's' for
         startprob, 't' for transmat, 'm' for means, and 'c' for
-        covars, etc.  Defaults to all parameters.
+        covars.  Defaults to all parameters.
 
 
     Examples
@@ -683,14 +704,11 @@ class GaussianHMM(_BaseHMM):
                  params=string.ascii_letters,
                  init_params=string.ascii_letters):
         _BaseHMM.__init__(self, n_components, startprob, transmat,
-                                        startprob_prior=startprob_prior,
-                                        transmat_prior=transmat_prior,
-                                        algorithm=algorithm,
-                                        random_state=random_state,
-                                        n_iter=n_iter,
-                                        thresh=thresh,
-                                        params=params,
-                                        init_params=init_params)
+                          startprob_prior=startprob_prior,
+                          transmat_prior=transmat_prior, algorithm=algorithm,
+                          random_state=random_state, n_iter=n_iter,
+                          thresh=thresh, params=params,
+                          init_params=init_params)
 
         self._covariance_type = covariance_type
         if not covariance_type in ['spherical', 'tied', 'diag', 'full']:
@@ -716,10 +734,10 @@ class GaussianHMM(_BaseHMM):
 
     def _set_means(self, means):
         means = np.asarray(means)
-        if hasattr(self, 'n_features') and \
-               means.shape != (self.n_components, self.n_features):
-            raise ValueError('means must have shape' +
-                    '(n_components, n_features)')
+        if (hasattr(self, 'n_features')
+                and means.shape != (self.n_components, self.n_features)):
+            raise ValueError('means must have shape '
+                             '(n_components, n_features)')
         self._means_ = means.copy()
         self.n_features = self._means_.shape[1]
 
@@ -775,6 +793,7 @@ class GaussianHMM(_BaseHMM):
                 cv.shape = (1, 1)
             self._covars_ = distribute_covar_matrix_to_match_covariance_type(
                 cv, self._covariance_type, self.n_components)
+            self._covars_[self._covars_ == 0] = 1e-5
 
     def _initialize_sufficient_statistics(self):
         stats = super(GaussianHMM, self)._initialize_sufficient_statistics()
@@ -802,7 +821,7 @@ class GaussianHMM(_BaseHMM):
             elif self._covariance_type in ('tied', 'full'):
                 for t, o in enumerate(obs):
                     obsobsT = np.outer(o, o)
-                    for c in xrange(self.n_components):
+                    for c in range(self.n_components):
                         stats['obs*obs.T'][c] += posteriors[t, c] * obsobsT
 
     def _do_mstep(self, stats, params):
@@ -839,14 +858,15 @@ class GaussianHMM(_BaseHMM):
                           - 2 * self._means_ * stats['obs']
                           + self._means_ ** 2 * denom)
                 cv_den = max(covars_weight - 1, 0) + denom
-                self._covars_ = (covars_prior + cv_num) / cv_den
+                self._covars_ = (covars_prior + cv_num) / np.maximum(cv_den, 1e-5)
                 if self._covariance_type == 'spherical':
-                    self._covars_ = np.tile(self._covars_.mean(1)
-                            [:, np.newaxis], (1, self._covars_.shape[1]))
+                    self._covars_ = np.tile(
+                        self._covars_.mean(1)[:, np.newaxis],
+                        (1, self._covars_.shape[1]))
             elif self._covariance_type in ('tied', 'full'):
                 cvnum = np.empty((self.n_components, self.n_features,
                                   self.n_features))
-                for c in xrange(self.n_components):
+                for c in range(self.n_components):
                     obsmean = np.outer(stats['obs'][c], self._means_[c])
 
                     cvnum[c] = (means_weight * np.outer(meandiff[c],
@@ -857,15 +877,43 @@ class GaussianHMM(_BaseHMM):
                                 * stats['post'][c])
                 cvweight = max(covars_weight - self.n_features, 0)
                 if self._covariance_type == 'tied':
-                    self._covars_ = ((covars_prior + cvnum.sum(axis=0))
-                                    / (cvweight + stats['post'].sum()))
+                    self._covars_ = ((covars_prior + cvnum.sum(axis=0)) /
+                                     (cvweight + stats['post'].sum()))
                 elif self._covariance_type == 'full':
-                    self._covars_ = ((covars_prior + cvnum)
-                                   / (cvweight + stats['post'][:, None, None]))
+                    self._covars_ = ((covars_prior + cvnum) /
+                                     (cvweight + stats['post'][:, None, None]))
 
+    def fit(self, obs):
+        """Estimate model parameters.
+
+        An initialization step is performed before entering the EM
+        algorithm. If you want to avoid this step, pass proper
+        ``init_params`` keyword argument to estimator's constructor.
+
+        Parameters
+        ----------
+        obs : list
+            List of array-like observation sequences, each of which
+            has shape (n_i, n_features), where n_i is the length of
+            the i_th observation.
+
+        Notes
+        -----
+        In general, `logprob` should be non-decreasing unless
+        aggressive pruning is used.  Decreasing `logprob` is generally
+        a sign of overfitting (e.g. the covariance parameter on one or
+        more components becomminging too small).  You can fix this by getting
+        more training data, or increasing covars_prior.
+        """
+        return super(GaussianHMM, self).fit(obs)
 
 class MultinomialHMM(_BaseHMM):
     """Hidden Markov Model with multinomial (discrete) emissions
+
+    .. warning::
+
+       The HMM module and its functions will be removed in 0.17
+       as it no longer falls within the project's scope and API.
 
     Attributes
     ----------
@@ -896,14 +944,14 @@ class MultinomialHMM(_BaseHMM):
     params : string, optional
         Controls which parameters are updated in the training
         process.  Can contain any combination of 's' for startprob,
-        't' for transmat, 'm' for means, and 'c' for covars, etc.
+        't' for transmat, 'e' for emmissionprob.
         Defaults to all parameters.
 
     init_params : string, optional
         Controls which parameters are initialized prior to
         training.  Can contain any combination of 's' for
-        startprob, 't' for transmat, 'm' for means, and 'c' for
-        covars, etc.  Defaults to all parameters.
+        startprob, 't' for transmat, 'e' for emmissionprob.
+        Defaults to all parameters.
 
     Examples
     --------
@@ -983,7 +1031,7 @@ class MultinomialHMM(_BaseHMM):
                     symbols = symbols.union(set(o))
                 self.n_symbols = len(symbols)
             emissionprob = normalize(self.random_state.rand(self.n_components,
-                self.n_symbols), 1)
+                                                            self.n_symbols), 1)
             self.emissionprob_ = emissionprob
 
     def _initialize_sufficient_statistics(self):
@@ -1005,7 +1053,7 @@ class MultinomialHMM(_BaseHMM):
         super(MultinomialHMM, self)._do_mstep(stats, params)
         if 'e' in params:
             self.emissionprob_ = (stats['obs']
-                                 / stats['obs'].sum(1)[:, np.newaxis])
+                                  / stats['obs'].sum(1)[:, np.newaxis])
 
     def _check_input_symbols(self, obs):
         """check if input can be used for Multinomial.fit input must be both
@@ -1013,7 +1061,7 @@ class MultinomialHMM(_BaseHMM):
         e.g. x = [0, 0, 2, 1, 3, 1, 1] is OK and y = [0, 0, 3, 5, 10] not
         """
 
-        symbols = np.asanyarray(obs).flatten()
+        symbols = np.asarray(obs).flatten()
 
         if symbols.dtype.kind != 'i':
             # input symbols must be integer
@@ -1024,7 +1072,7 @@ class MultinomialHMM(_BaseHMM):
             return False
 
         if np.any(symbols < 0):
-            # input containes negative intiger
+            # input contains negative intiger
             return False
 
         symbols.sort()
@@ -1035,6 +1083,19 @@ class MultinomialHMM(_BaseHMM):
         return True
 
     def fit(self, obs, **kwargs):
+        """Estimate model parameters.
+
+        An initialization step is performed before entering the EM
+        algorithm. If you want to avoid this step, pass proper
+        ``init_params`` keyword argument to estimator's constructor.
+
+        Parameters
+        ----------
+        obs : list
+            List of array-like observation sequences, each of which
+            has shape (n_i, n_features), where n_i is the length of
+            the i_th observation.
+        """
         err_msg = ("Input must be both positive integer array and "
                    "every element must be continuous, but %s was given.")
 
@@ -1047,18 +1108,13 @@ class MultinomialHMM(_BaseHMM):
 class GMMHMM(_BaseHMM):
     """Hidden Markov Model with Gaussin mixture emissions
 
+    .. warning::
+
+       The HMM module and its functions will be removed in 0.17
+       as it no longer falls within the project's scope and API.
+
     Attributes
     ----------
-    init_params : string, optional
-        Controls which parameters are initialized prior to training. Can \
-        contain any combination of 's' for startprob, 't' for transmat, 'm' \
-        for means, and 'c' for covars, etc.  Defaults to all parameters.
-
-    params : string, optional
-        Controls which parameters are updated in the training process.  Can
-        contain any combination of 's' for startprob, 't' for transmat,'m' for
-        means, and 'c' for covars, etc.  Defaults to all parameters.
-
     n_components : int
         Number of states in the model.
 
@@ -1079,6 +1135,18 @@ class GMMHMM(_BaseHMM):
 
     thresh : float, optional
         Convergence threshold.
+
+    init_params : string, optional
+        Controls which parameters are initialized prior to training.
+        Can contain any combination of 's' for startprob, 't' for transmat, 'm'
+        for means, 'c' for covars, and 'w' for GMM mixing weights.  Defaults to
+        all parameters.
+
+    params : string, optional
+        Controls which parameters are updated in the training process. Can
+        contain any combination of 's' for startprob, 't' for transmat,
+        'm' for means, and 'c' for covars, and 'w' for GMM mixing weights.
+        Defaults to all parameters.
 
     Examples
     --------
@@ -1120,15 +1188,16 @@ class GMMHMM(_BaseHMM):
         self.n_mix = n_mix
         self._covariance_type = covariance_type
         self.covars_prior = covars_prior
+        self.gmms = gmms
         if gmms is None:
             gmms = []
-            for x in xrange(self.n_components):
+            for x in range(self.n_components):
                 if covariance_type is None:
                     g = GMM(n_mix)
                 else:
                     g = GMM(n_mix, covariance_type=covariance_type)
                 gmms.append(g)
-        self.gmms = gmms
+        self.gmms_ = gmms
 
     # Read-only properties.
     @property
@@ -1140,24 +1209,24 @@ class GMMHMM(_BaseHMM):
         return self._covariance_type
 
     def _compute_log_likelihood(self, obs):
-        return np.array([g.score(obs) for g in self.gmms]).T
+        return np.array([g.score(obs) for g in self.gmms_]).T
 
     def _generate_sample_from_state(self, state, random_state=None):
-        return self.gmms[state].sample(1, random_state=random_state).flatten()
+        return self.gmms_[state].sample(1, random_state=random_state).flatten()
 
     def _init(self, obs, params='stwmc'):
         super(GMMHMM, self)._init(obs, params=params)
 
         allobs = np.concatenate(obs, 0)
-        for g in self.gmms:
+        for g in self.gmms_:
             g.set_params(init_params=params, n_iter=0)
             g.fit(allobs)
 
     def _initialize_sufficient_statistics(self):
         stats = super(GMMHMM, self)._initialize_sufficient_statistics()
-        stats['norm'] = [np.zeros(g.weights_.shape) for g in self.gmms]
-        stats['means'] = [np.zeros(np.shape(g.means_)) for g in self.gmms]
-        stats['covars'] = [np.zeros(np.shape(g.covars_)) for g in self.gmms]
+        stats['norm'] = [np.zeros(g.weights_.shape) for g in self.gmms_]
+        stats['means'] = [np.zeros(np.shape(g.means_)) for g in self.gmms_]
+        stats['covars'] = [np.zeros(np.shape(g.covars_)) for g in self.gmms_]
         return stats
 
     def _accumulate_sufficient_statistics(self, stats, obs, framelogprob,
@@ -1167,8 +1236,8 @@ class GMMHMM(_BaseHMM):
             stats, obs, framelogprob, posteriors, fwdlattice, bwdlattice,
             params)
 
-        for state, g in enumerate(self.gmms):
-            _, lgmm_posteriors = g.eval(obs)
+        for state, g in enumerate(self.gmms_):
+            _, lgmm_posteriors = g.score_samples(obs)
             lgmm_posteriors += np.log(posteriors[:, state][:, np.newaxis]
                                       + np.finfo(np.float).eps)
             gmm_posteriors = np.exp(lgmm_posteriors)
@@ -1200,7 +1269,7 @@ class GMMHMM(_BaseHMM):
         super(GMMHMM, self)._do_mstep(stats, params)
         # All that is left to do is to apply covars_prior to the
         # parameters updated in _accumulate_sufficient_statistics.
-        for state, g in enumerate(self.gmms):
+        for state, g in enumerate(self.gmms_):
             n_features = g.means_.shape[1]
             norm = stats['norm'][state]
             if 'w' in params:
@@ -1211,17 +1280,17 @@ class GMMHMM(_BaseHMM):
                 if g.covariance_type == 'tied':
                     g.covars_ = ((stats['covars'][state]
                                  + self.covars_prior * np.eye(n_features))
-                                / norm.sum())
+                                 / norm.sum())
                 else:
                     cvnorm = np.copy(norm)
                     shape = np.ones(g.covars_.ndim)
                     shape[0] = np.shape(g.covars_)[0]
                     cvnorm.shape = shape
                     if (g.covariance_type in ['spherical', 'diag']):
-                        g.covars_ = (stats['covars'][state]
-                                    + self.covars_prior) / cvnorm
+                        g.covars_ = (stats['covars'][state] +
+                                     self.covars_prior) / cvnorm
                     elif g.covariance_type == 'full':
                         eye = np.eye(n_features)
                         g.covars_ = ((stats['covars'][state]
                                      + self.covars_prior * eye[np.newaxis])
-                                    / cvnorm)
+                                     / cvnorm)

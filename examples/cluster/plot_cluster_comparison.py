@@ -20,12 +20,12 @@ create many clusters. Thus in this example its two parameters
 (damping and per-point preference) were set to to mitigate this
 behavior.
 """
-print __doc__
+print(__doc__)
 
 import time
 
 import numpy as np
-import pylab as pl
+import matplotlib.pyplot as plt
 
 from sklearn import cluster, datasets
 from sklearn.metrics import euclidean_distances
@@ -46,13 +46,13 @@ no_structure = np.random.rand(n_samples, 2), None
 colors = np.array([x for x in 'bgrcmykbgrcmykbgrcmykbgrcmyk'])
 colors = np.hstack([colors] * 20)
 
-pl.figure(figsize=(14, 9.5))
-pl.subplots_adjust(left=.001, right=.999, bottom=.001, top=.96, wspace=.05,
-        hspace=.01)
+plt.figure(figsize=(17, 9.5))
+plt.subplots_adjust(left=.001, right=.999, bottom=.001, top=.96, wspace=.05,
+                    hspace=.01)
 
 plot_num = 1
 for i_dataset, dataset in enumerate([noisy_circles, noisy_moons, blobs,
-                no_structure]):
+                                     no_structure]):
     X, y = dataset
     # normalize dataset for easier parameter selection
     X = StandardScaler().fit_transform(X)
@@ -72,15 +72,28 @@ for i_dataset, dataset in enumerate([noisy_circles, noisy_moons, blobs,
     # create clustering estimators
     ms = cluster.MeanShift(bandwidth=bandwidth, bin_seeding=True)
     two_means = cluster.MiniBatchKMeans(n_clusters=2)
-    ward_five = cluster.Ward(n_clusters=2, connectivity=connectivity)
-    spectral = cluster.SpectralClustering(n_clusters=2, mode='arpack',
-            affinity="nearest_neighbors")
+    ward = cluster.AgglomerativeClustering(n_clusters=2,
+                    linkage='ward', connectivity=connectivity)
+    spectral = cluster.SpectralClustering(n_clusters=2,
+                                          eigen_solver='arpack',
+                                          affinity="nearest_neighbors")
     dbscan = cluster.DBSCAN(eps=.2)
     affinity_propagation = cluster.AffinityPropagation(damping=.9,
-            preference=-200)
+                                                       preference=-200)
 
-    for algorithm in [two_means, affinity_propagation, ms, spectral,
-                      ward_five, dbscan]:
+    average_linkage = cluster.AgglomerativeClustering(linkage="average",
+                            affinity="cityblock", n_clusters=2,
+                            connectivity=connectivity)
+
+    for name, algorithm in [
+                            ('MiniBatchKMeans', two_means),
+                            ('AffinityPropagation', affinity_propagation),
+                            ('MeanShift', ms),
+                            ('SpectralClustering', spectral),
+                            ('Ward', ward),
+                            ('AgglomerativeClustering', average_linkage),
+                            ('DBSCAN', dbscan)
+                           ]:
         # predict cluster memberships
         t0 = time.time()
         algorithm.fit(X)
@@ -91,22 +104,22 @@ for i_dataset, dataset in enumerate([noisy_circles, noisy_moons, blobs,
             y_pred = algorithm.predict(X)
 
         # plot
-        pl.subplot(4, 6, plot_num)
+        plt.subplot(4, 7, plot_num)
         if i_dataset == 0:
-            pl.title(str(algorithm).split('(')[0], size=18)
-        pl.scatter(X[:, 0], X[:, 1], color=colors[y_pred].tolist(), s=10)
+            plt.title(name, size=18)
+        plt.scatter(X[:, 0], X[:, 1], color=colors[y_pred].tolist(), s=10)
 
         if hasattr(algorithm, 'cluster_centers_'):
             centers = algorithm.cluster_centers_
             center_colors = colors[:len(centers)]
-            pl.scatter(centers[:, 0], centers[:, 1], s=100, c=center_colors)
-        pl.xlim(-2, 2)
-        pl.ylim(-2, 2)
-        pl.xticks(())
-        pl.yticks(())
-        pl.text(.99, .01, ('%.2fs' % (t1 - t0)).lstrip('0'),
-                transform=pl.gca().transAxes, size=15,
-                horizontalalignment='right')
+            plt.scatter(centers[:, 0], centers[:, 1], s=100, c=center_colors)
+        plt.xlim(-2, 2)
+        plt.ylim(-2, 2)
+        plt.xticks(())
+        plt.yticks(())
+        plt.text(.99, .01, ('%.2fs' % (t1 - t0)).lstrip('0'),
+                 transform=plt.gca().transAxes, size=15,
+                 horizontalalignment='right')
         plot_num += 1
 
-pl.show()
+plt.show()

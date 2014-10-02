@@ -1,5 +1,5 @@
 # Authors: Rob Zinkov, Mathieu Blondel
-# License: BSD Style.
+# License: BSD 3 clause
 
 from .stochastic_gradient import BaseSGDClassifier
 from .stochastic_gradient import BaseSGDRegressor
@@ -50,11 +50,11 @@ class PassiveAggressiveClassifier(BaseSGDClassifier):
 
     Attributes
     ----------
-    `coef_` : array, shape = [1, n_features] if n_classes == 2 else [n_classes,
+    coef_ : array, shape = [1, n_features] if n_classes == 2 else [n_classes,
     n_features]
         Weights assigned to the features.
 
-    `intercept_` : array, shape = [1] if n_classes == 2 else [n_classes]
+    intercept_ : array, shape = [1] if n_classes == 2 else [n_classes]
         Constants in decision function.
 
     See also
@@ -127,7 +127,7 @@ class PassiveAggressiveClassifier(BaseSGDClassifier):
             Target values
 
         coef_init : array, shape = [n_classes,n_features]
-            The initial coeffients to warm-start the optimization.
+            The initial coefficients to warm-start the optimization.
 
         intercept_init : array, shape = [n_classes]
             The initial intercept to warm-start the optimization.
@@ -190,11 +190,11 @@ class PassiveAggressiveRegressor(BaseSGDRegressor):
 
     Attributes
     ----------
-    `coef_` : array, shape = [1, n_features] if n_classes == 2 else [n_classes,
+    coef_ : array, shape = [1, n_features] if n_classes == 2 else [n_classes,
     n_features]
         Weights assigned to the features.
 
-    `intercept_` : array, shape = [1] if n_classes == 2 else [n_classes]
+    intercept_ : array, shape = [1] if n_classes == 2 else [n_classes]
         Constants in decision function.
 
     See also
@@ -261,7 +261,7 @@ class PassiveAggressiveRegressor(BaseSGDRegressor):
             Target values
 
         coef_init : array, shape = [n_features]
-            The initial coeffients to warm-start the optimization.
+            The initial coefficients to warm-start the optimization.
 
         intercept_init : array, shape = [1]
             The initial intercept to warm-start the optimization.

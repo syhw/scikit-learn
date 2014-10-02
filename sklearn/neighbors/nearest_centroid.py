@@ -6,14 +6,15 @@ Nearest Centroid Classification
 # Author: Robert Layton <robertlayton@gmail.com>
 #         Olivier Grisel <olivier.grisel@ensta.org>
 #
-# License: BSD Style.
+# License: BSD 3 clause
 
 import numpy as np
 from scipy import sparse as sp
 
 from ..base import BaseEstimator, ClassifierMixin
-from ..utils.validation import check_arrays, atleast2d_or_csr
+from ..externals.six.moves import xrange
 from ..metrics.pairwise import pairwise_distances
+from ..utils.validation import check_array, check_X_y
 
 
 class NearestCentroid(BaseEstimator, ClassifierMixin):
@@ -34,7 +35,7 @@ class NearestCentroid(BaseEstimator, ClassifierMixin):
 
     Attributes
     ----------
-    `centroids_` : array-like, shape = [n_classes, n_features]
+    centroids_ : array-like, shape = [n_classes, n_features]
         Centroid of each class
 
     Examples
@@ -46,7 +47,7 @@ class NearestCentroid(BaseEstimator, ClassifierMixin):
     >>> clf = NearestCentroid()
     >>> clf.fit(X, y)
     NearestCentroid(metric='euclidean', shrink_threshold=None)
-    >>> print clf.predict([[-0.8, -1]])
+    >>> print(clf.predict([[-0.8, -1]]))
     [1]
 
     See also
@@ -55,7 +56,7 @@ class NearestCentroid(BaseEstimator, ClassifierMixin):
 
     Notes
     -----
-    When used for text classification with tf–idf vectors, this classifier is
+    When used for text classification with tf-idf vectors, this classifier is
     also known as the Rocchio classifier.
 
     References
@@ -84,7 +85,7 @@ class NearestCentroid(BaseEstimator, ClassifierMixin):
         y : array, shape = [n_samples]
             Target values (integers)
         """
-        X, y = check_arrays(X, y, sparse_format="csr")
+        X, y = check_X_y(X, y, ['csr', 'csc'])
         if sp.issparse(X) and self.shrink_threshold:
             raise ValueError("threshold shrinking not supported"
                              " for sparse input")
@@ -150,7 +151,7 @@ class NearestCentroid(BaseEstimator, ClassifierMixin):
         be the distance matrix between the data to be predicted and
         ``self.centroids_``.
         """
-        X = atleast2d_or_csr(X)
+        X = check_array(X, accept_sparse='csr')
         if not hasattr(self, "centroids_"):
             raise AttributeError("Model has not been trained yet.")
         return self.classes_[pairwise_distances(

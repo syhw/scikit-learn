@@ -28,19 +28,17 @@ Vision
 --------
 
 The vision is to provide tools to easily achieve better performance and
-reproducibility when working with long running jobs. In addition, Joblib
-can also be used to provide a light-weight make replacement or caching
-solution.
+reproducibility when working with long running jobs.
 
  *  **Avoid computing twice the same thing**: code is rerun over an
     over, for instance when prototyping computational-heavy jobs (as in
-    scientific development), but hand-crafted solution to aleviate this
+    scientific development), but hand-crafted solution to alleviate this
     issue is error-prone and often leads to unreproducible results
 
  *  **Persist to disk transparently**: persisting in an efficient way
     arbitrary objects containing large data is hard. Using
     joblib's caching mechanism avoids hand-written persistence and
-    implicitely links the file on disk to the execution context of
+    implicitly links the file on disk to the execution context of
     the original Python object. As a result, joblib's persistence is
     good for resuming an application status or computational job, eg
     after a crash.
@@ -102,10 +100,10 @@ Main features
 
 """
 
-__version__ = '0.7.0b'
+__version__ = '0.8.3'
 
 
-from .memory import Memory
+from .memory import Memory, MemorizedResult
 from .logger import PrintTime
 from .logger import Logger
 from .hashing import hash

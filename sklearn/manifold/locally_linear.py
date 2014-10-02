@@ -2,13 +2,13 @@
 
 # Author: Fabian Pedregosa -- <fabian.pedregosa@inria.fr>
 #         Jake Vanderplas  -- <vanderplas@astro.washington.edu>
-# License: BSD, (C) INRIA 2011
+# License: BSD 3 clause (C) INRIA 2011
 
 import numpy as np
 from scipy.linalg import eigh, svd, qr, solve
 from scipy.sparse import eye, csr_matrix
 from ..base import BaseEstimator, TransformerMixin
-from ..utils import array2d, check_random_state, check_arrays
+from ..utils import check_random_state, check_array
 from ..utils.arpack import eigsh
 from ..neighbors import NearestNeighbors
 
@@ -69,7 +69,7 @@ def barycenter_kneighbors_graph(X, n_neighbors, reg=1e-3):
 
     Parameters
     ----------
-    X : {array-like, sparse matrix, BallTree, cKDTree, NearestNeighbors}
+    X : {array-like, sparse matrix, BallTree, KDTree, NearestNeighbors}
         Sample data, shape = (n_samples, n_features), in the form of a
         numpy array, sparse array, precomputed tree, or NearestNeighbors
         object.
@@ -177,15 +177,14 @@ def null_space(M, k, k_skip=1, eigen_solver='arpack', tol=1E-6, max_iter=100,
 
 
 def locally_linear_embedding(
-    X, n_neighbors, n_components, reg=1e-3, eigen_solver='auto',
-    tol=1e-6, max_iter=100, method='standard',
-    hessian_tol=1E-4, modified_tol=1E-12,
-    random_state=None):
+        X, n_neighbors, n_components, reg=1e-3, eigen_solver='auto', tol=1e-6,
+        max_iter=100, method='standard', hessian_tol=1E-4, modified_tol=1E-12,
+        random_state=None):
     """Perform a Locally Linear Embedding analysis on the data.
 
     Parameters
     ----------
-    X : {array-like, sparse matrix, BallTree, cKDTree, NearestNeighbors}
+    X : {array-like, sparse matrix, BallTree, KDTree, NearestNeighbors}
         Sample data, shape = (n_samples, n_features), in the form of a
         numpy array, sparse array, precomputed tree, or NearestNeighbors
         object.
@@ -305,11 +304,12 @@ def locally_linear_embedding(
             M.flat[::M.shape[0] + 1] += 1  # W = W - I = W - I
 
     elif method == 'hessian':
-        dp = n_components * (n_components + 1) / 2
+        dp = n_components * (n_components + 1) // 2
 
         if n_neighbors <= n_components + dp:
             raise ValueError("for method='hessian', n_neighbors must be "
-                    "greater than [n_components * (n_components + 3) / 2]")
+                             "greater than "
+                             "[n_components * (n_components + 3) / 2]")
 
         neighbors = nbrs.kneighbors(X, n_neighbors=n_neighbors + 1,
                                     return_distance=False)
@@ -337,8 +337,8 @@ def locally_linear_embedding(
 
             j = 1 + n_components
             for k in range(n_components):
-                Yi[:, j:j + n_components - k] = \
-                        U[:, k:k + 1] * U[:, k:n_components]
+                Yi[:, j:j + n_components - k] = (U[:, k:k + 1]
+                                                 * U[:, k:n_components])
                 j += n_components - k
 
             Q, R = qr(Yi)
@@ -358,7 +358,7 @@ def locally_linear_embedding(
     elif method == 'modified':
         if n_neighbors < n_components:
             raise ValueError("modified LLE requires "
-                "n_neighbors >= n_components")
+                             "n_neighbors >= n_components")
 
         neighbors = nbrs.kneighbors(X, n_neighbors=n_neighbors + 1,
                                     return_distance=False)
@@ -533,11 +533,11 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
         maximum number of iterations for the arpack solver.
         Not used if eigen_solver=='dense'.
 
-    method : string ['standard' | 'hessian' | 'modified' |'ltsa']
-        standard : use the standard locally linear embedding algorithm.
-                   see reference [1]
-        hessian  : use the Hessian eigenmap method.  This method requires
-                   n_neighbors > n_components * (1 + (n_components + 1) / 2.
+    method : string ('standard', 'hessian', 'modified' or 'ltsa')
+        standard : use the standard locally linear embedding algorithm.  see
+                   reference [1]
+        hessian  : use the Hessian eigenmap method. This method requires
+                   ``n_neighbors > n_components * (1 + (n_components + 1) / 2``
                    see reference [2]
         modified : use the modified locally linear embedding algorithm.
                    see reference [3]
@@ -546,11 +546,11 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
 
     hessian_tol : float, optional
         Tolerance for Hessian eigenmapping method.
-        Only used if method == 'hessian'
+        Only used if ``method == 'hessian'``
 
     modified_tol : float, optional
         Tolerance for modified LLE method.
-        Only used if method == 'modified'
+        Only used if ``method == 'modified'``
 
     neighbors_algorithm : string ['auto'|'brute'|'kd_tree'|'ball_tree']
         algorithm to use for nearest neighbors search,
@@ -562,13 +562,13 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
 
     Attributes
     ----------
-    `embedding_vectors_` : array-like, shape [n_components, n_samples]
+    embedding_vectors_ : array-like, shape [n_components, n_samples]
         Stores the embedding vectors
 
-    `reconstruction_error_` : float
+    reconstruction_error_ : float
         Reconstruction error associated with `embedding_vectors_`
 
-    `nbrs_` : NearestNeighbors object
+    nbrs_ : NearestNeighbors object
         Stores nearest neighbors instance, including BallTree or KDtree
         if applicable.
 
@@ -589,9 +589,9 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, n_neighbors=5, n_components=2, reg=1E-3,
-            eigen_solver='auto', tol=1E-6, max_iter=100, method='standard',
-            hessian_tol=1E-4, modified_tol=1E-12, neighbors_algorithm='auto',
-            random_state=None):
+                 eigen_solver='auto', tol=1E-6, max_iter=100,
+                 method='standard', hessian_tol=1E-4, modified_tol=1E-12,
+                 neighbors_algorithm='auto', random_state=None):
 
         self.n_neighbors = n_neighbors
         self.n_components = n_components
@@ -607,10 +607,10 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
 
     def _fit_transform(self, X):
         self.nbrs_ = NearestNeighbors(self.n_neighbors,
-                algorithm=self.neighbors_algorithm)
+                                      algorithm=self.neighbors_algorithm)
 
-        self.random_state = check_random_state(self.random_state)
-        X, = check_arrays(X, sparse_format='dense')
+        random_state = check_random_state(self.random_state)
+        X = check_array(X)
         self.nbrs_.fit(X)
         self.embedding_, self.reconstruction_error_ = \
             locally_linear_embedding(
@@ -618,7 +618,7 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
                 eigen_solver=self.eigen_solver, tol=self.tol,
                 max_iter=self.max_iter, method=self.method,
                 hessian_tol=self.hessian_tol, modified_tol=self.modified_tol,
-                random_state=self.random_state)
+                random_state=random_state)
 
     def fit(self, X, y=None):
         """Compute the embedding vectors for data X
@@ -667,7 +667,7 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
         Because of scaling performed by this method, it is discouraged to use
         it together with methods that are not scale-invariant (like SVMs)
         """
-        X = array2d(X)
+        X = check_array(X)
         ind = self.nbrs_.kneighbors(X, n_neighbors=self.n_neighbors,
                                     return_distance=False)
         weights = barycenter_weights(X, self.nbrs_._fit_X[ind],

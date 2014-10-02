@@ -37,7 +37,7 @@ def generate_graph(N=20):
     dist_matrix += dist_matrix.T
 
     #make graph sparse
-    i = (rng.randint(N, size=N * N / 2), rng.randint(N, size=N * N / 2))
+    i = (rng.randint(N, size=N * N // 2), rng.randint(N, size=N * N // 2))
     dist_matrix[i] = 0
 
     #set diagonal to zero
@@ -79,7 +79,8 @@ def test_shortest_path():
         for i in range(dist_matrix.shape[0]):
             # Non-reachable nodes have distance 0 in graph_py
             dist_dict = defaultdict(int)
-            dist_dict.update(single_source_shortest_path_length(dist_matrix, i))
+            dist_dict.update(single_source_shortest_path_length(dist_matrix,
+                                                                i))
 
             for j in range(graph_py[i].shape[0]):
                 assert_array_almost_equal(dist_dict[j], graph_py[i, j])

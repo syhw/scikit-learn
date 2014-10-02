@@ -10,11 +10,14 @@ of Gaussian Mixture Models.
 #         Bertrand Thirion <bertrand.thirion@inria.fr>
 
 import numpy as np
+from scipy import linalg
 
 from ..base import BaseEstimator
 from ..utils import check_random_state
 from ..utils.extmath import logsumexp, pinvh
 from .. import cluster
+
+from sklearn.externals.six.moves import zip
 
 EPS = np.finfo(float).eps
 
@@ -94,11 +97,11 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
     elif covariance_type == 'diag':
         rand = np.dot(np.diag(np.sqrt(covar)), rand)
     else:
-        from scipy import linalg
-        U, s, V = linalg.svd(covar)
-        sqrtS = np.diag(np.sqrt(s))
-        sqrt_covar = np.dot(U, np.dot(sqrtS, V))
-        rand = np.dot(sqrt_covar, rand)
+        s, U = linalg.eigh(covar)
+        s.clip(0, out=s)        # get rid of tiny negatives
+        np.sqrt(s, out=s)
+        U *= s
+        rand = np.dot(U, rand)
 
     return (rand.T + mean).T
 
@@ -152,22 +155,22 @@ class GMM(BaseEstimator):
 
     Attributes
     ----------
-    `weights_` : array, shape (`n_components`,)
+    weights_ : array, shape (`n_components`,)
         This attribute stores the mixing weights for each mixture component.
 
-    `means_` : array, shape (`n_components`, `n_features`)
+    means_ : array, shape (`n_components`, `n_features`)
         Mean parameters for each mixture component.
 
-    `covars_` : array
+    covars_ : array
         Covariance parameters for each mixture component.  The shape
         depends on `covariance_type`::
 
-            (n_components,)                        if 'spherical',
+            (n_components, n_features)             if 'spherical',
             (n_features, n_features)               if 'tied',
             (n_components, n_features)             if 'diag',
             (n_components, n_features, n_features) if 'full'
 
-    `converged_` : bool
+    converged_ : bool
         True when convergence was reached in fit(), False otherwise.
 
 
@@ -175,7 +178,7 @@ class GMM(BaseEstimator):
     See Also
     --------
 
-    DPGMM : Ininite gaussian mixture model, using the dirichlet
+    DPGMM : Infinite gaussian mixture model, using the dirichlet
         process, fit with a variational algorithm
 
 
@@ -236,7 +239,7 @@ class GMM(BaseEstimator):
 
         if not covariance_type in ['spherical', 'tied', 'diag', 'full']:
             raise ValueError('Invalid value for covariance_type: %s' %
-                            covariance_type)
+                             covariance_type)
 
         if n_init < 1:
             raise ValueError('GMM estimation requires at least one run')
@@ -271,8 +274,8 @@ class GMM(BaseEstimator):
         _validate_covars(covars, self.covariance_type, self.n_components)
         self.covars_ = covars
 
-    def eval(self, X):
-        """Evaluate the model on data
+    def score_samples(self, X):
+        """Return the per-sample likelihood of the data under the model.
 
         Compute the log probability of X under the model and
         return the posterior distribution (responsibilities) of each
@@ -281,14 +284,15 @@ class GMM(BaseEstimator):
         Parameters
         ----------
         X: array_like, shape (n_samples, n_features)
-            List of n_features-dimensional data points.  Each row
+            List of n_features-dimensional data points. Each row
             corresponds to a single data point.
 
         Returns
         -------
-        logprob: array_like, shape (n_samples,)
-            Log probabilities of each data point in X
-        responsibilities: array_like, shape (n_samples, n_components)
+        logprob : array_like, shape (n_samples,)
+            Log probabilities of each data point in X.
+
+        responsibilities : array_like, shape (n_samples, n_components)
             Posterior probabilities of each mixture component for each
             observation
         """
@@ -298,10 +302,10 @@ class GMM(BaseEstimator):
         if X.size == 0:
             return np.array([]), np.empty((0, self.n_components))
         if X.shape[1] != self.means_.shape[1]:
-            raise ValueError('the shape of X  is not compatible with self')
+            raise ValueError('The shape of X  is not compatible with self')
 
-        lpr = (log_multivariate_normal_density(
-                X, self.means_, self.covars_, self.covariance_type)
+        lpr = (log_multivariate_normal_density(X, self.means_, self.covars_,
+                                               self.covariance_type)
                + np.log(self.weights_))
         logprob = logsumexp(lpr, axis=1)
         responsibilities = np.exp(lpr - logprob[:, np.newaxis])
@@ -321,7 +325,7 @@ class GMM(BaseEstimator):
         logprob : array_like, shape (n_samples,)
             Log probabilities of each data point in X
         """
-        logprob, _ = self.eval(X)
+        logprob, _ = self.score_samples(X)
         return logprob
 
     def predict(self, X):
@@ -335,7 +339,7 @@ class GMM(BaseEstimator):
         -------
         C : array, shape = (n_samples,)
         """
-        logprob, responsibilities = self.eval(X)
+        logprob, responsibilities = self.score_samples(X)
         return responsibilities.argmax(axis=1)
 
     def predict_proba(self, X):
@@ -352,7 +356,7 @@ class GMM(BaseEstimator):
             Returns the probability of the sample for each Gaussian
             (state) in the model.
         """
-        logprob, responsibilities = self.eval(X)
+        logprob, responsibilities = self.score_samples(X)
         return responsibilities
 
     def sample(self, n_samples=1, random_state=None):
@@ -378,7 +382,7 @@ class GMM(BaseEstimator):
         # decide which component to use for each sample
         comps = weight_cdf.searchsorted(rand)
         # for each component, generate all needed samples
-        for comp in xrange(self.n_components):
+        for comp in range(self.n_components):
             # occurrences of current component in X
             comp_in_X = (comp == comps)
             # number of those occurrences
@@ -438,15 +442,15 @@ class GMM(BaseEstimator):
                     cv.shape = (1, 1)
                 self.covars_ = \
                     distribute_covar_matrix_to_match_covariance_type(
-                    cv, self.covariance_type, self.n_components)
+                        cv, self.covariance_type, self.n_components)
 
             # EM algorithms
             log_likelihood = []
             # reset self.converged_ to False
             self.converged_ = False
-            for i in xrange(self.n_iter):
+            for i in range(self.n_iter):
                 # Expectation step
-                curr_log_likelihood, responsibilities = self.eval(X)
+                curr_log_likelihood, responsibilities = self.score_samples(X)
                 log_likelihood.append(curr_log_likelihood.sum())
 
                 # Check for convergence.
@@ -457,7 +461,7 @@ class GMM(BaseEstimator):
 
                 # Maximization step
                 self._do_mstep(X, responsibilities, self.params,
-                        self.min_covar)
+                               self.min_covar)
 
             # if the results are better, keep it
             if self.n_iter:
@@ -510,7 +514,7 @@ class GMM(BaseEstimator):
         elif self.covariance_type == 'spherical':
             cov_params = self.n_components
         mean_params = ndim * self.n_components
-        return  int(cov_params + mean_params + self.n_components - 1)
+        return int(cov_params + mean_params + self.n_components - 1)
 
     def bic(self, X):
         """Bayesian information criterion for the current model fit
@@ -524,8 +528,8 @@ class GMM(BaseEstimator):
         -------
         bic: float (the lower the better)
         """
-        return (- 2 * self.score(X).sum() +
-                 self._n_parameters() * np.log(X.shape[0]))
+        return (-2 * self.score(X).sum() +
+                self._n_parameters() * np.log(X.shape[0]))
 
     def aic(self, X):
         """Akaike information criterion for the current model fit
@@ -547,7 +551,7 @@ class GMM(BaseEstimator):
 #########################################################################
 
 
-def _log_multivariate_normal_density_diag(X, means=0.0, covars=1.0):
+def _log_multivariate_normal_density_diag(X, means, covars):
     """Compute Gaussian log-density at X for a diagonal model"""
     n_samples, n_dim = X.shape
     lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
@@ -557,7 +561,7 @@ def _log_multivariate_normal_density_diag(X, means=0.0, covars=1.0):
     return lpr
 
 
-def _log_multivariate_normal_density_spherical(X, means=0.0, covars=1.0):
+def _log_multivariate_normal_density_spherical(X, means, covars):
     """Compute Gaussian log-density at X for a spherical model"""
     cv = covars.copy()
     if covars.ndim == 1:
@@ -569,7 +573,6 @@ def _log_multivariate_normal_density_spherical(X, means=0.0, covars=1.0):
 
 def _log_multivariate_normal_density_tied(X, means, covars):
     """Compute Gaussian log-density at X for a tied model"""
-    from scipy import linalg
     n_samples, n_dim = X.shape
     icv = pinvh(covars)
     lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.log(linalg.det(covars) + 0.1)
@@ -582,29 +585,21 @@ def _log_multivariate_normal_density_tied(X, means, covars):
 def _log_multivariate_normal_density_full(X, means, covars, min_covar=1.e-7):
     """Log probability for full covariance matrices.
     """
-    from scipy import linalg
-    import itertools
-    if hasattr(linalg, 'solve_triangular'):
-        # only in scipy since 0.9
-        solve_triangular = linalg.solve_triangular
-    else:
-        # slower, but works
-        solve_triangular = linalg.solve
     n_samples, n_dim = X.shape
     nmix = len(means)
     log_prob = np.empty((n_samples, nmix))
-    for c, (mu, cv) in enumerate(itertools.izip(means, covars)):
+    for c, (mu, cv) in enumerate(zip(means, covars)):
         try:
             cv_chol = linalg.cholesky(cv, lower=True)
         except linalg.LinAlgError:
-            # The model is most probabily stuck in a component with too
+            # The model is most probably stuck in a component with too
             # few observations, we need to reinitialize this components
             cv_chol = linalg.cholesky(cv + min_covar * np.eye(n_dim),
                                       lower=True)
         cv_log_det = 2 * np.sum(np.log(np.diagonal(cv_chol)))
-        cv_sol = solve_triangular(cv_chol, (X - mu).T, lower=True).T
-        log_prob[:, c] = - .5 * (np.sum(cv_sol ** 2, axis=1) + \
-                                     n_dim * np.log(2 * np.pi) + cv_log_det)
+        cv_sol = linalg.solve_triangular(cv_chol, (X - mu).T, lower=True).T
+        log_prob[:, c] = - .5 * (np.sum(cv_sol ** 2, axis=1) +
+                                 n_dim * np.log(2 * np.pi) + cv_log_det)
 
     return log_prob
 
@@ -627,7 +622,7 @@ def _validate_covars(covars, covariance_type, n_components):
                              "positive-definite")
     elif covariance_type == 'diag':
         if len(covars.shape) != 2:
-            raise ValueError("'diag' covars must have shape"
+            raise ValueError("'diag' covars must have shape "
                              "(n_components, n_dim)")
         elif np.any(covars <= 0):
             raise ValueError("'diag' covars must be non-negative")
@@ -640,7 +635,7 @@ def _validate_covars(covars, covariance_type, n_components):
                              "(n_components, n_dim, n_dim)")
         for n, cv in enumerate(covars):
             if (not np.allclose(cv, cv.T)
-                or np.any(linalg.eigvalsh(cv) <= 0)):
+                    or np.any(linalg.eigvalsh(cv) <= 0)):
                 raise ValueError("component %d of 'full' covars must be "
                                  "symmetric, positive-definite" % n)
     else:
@@ -649,7 +644,7 @@ def _validate_covars(covars, covariance_type, n_components):
 
 
 def distribute_covar_matrix_to_match_covariance_type(
-    tied_cv, covariance_type, n_components):
+        tied_cv, covariance_type, n_components):
     """Create all the covariance matrices from a given template
     """
     if covariance_type == 'spherical':
@@ -689,7 +684,7 @@ def _covar_mstep_full(gmm, X, responsibilities, weighted_X_sum, norm,
     # Distribution"
     n_features = X.shape[1]
     cv = np.empty((gmm.n_components, n_features, n_features))
-    for c in xrange(gmm.n_components):
+    for c in range(gmm.n_components):
         post = responsibilities[:, c]
         # Underflow Errors in doing post * X.T are  not important
         np.seterr(under='ignore')

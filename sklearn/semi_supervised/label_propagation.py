@@ -27,8 +27,8 @@ Kernel:
   size O(k*N) which will run much faster. See the documentation for SVMs for
   more info on kernels.
 
-Example
--------
+Examples
+--------
 >>> from sklearn import datasets
 >>> from sklearn.semi_supervised import LabelPropagation
 >>> label_prop_model = LabelPropagation()
@@ -53,8 +53,6 @@ Non-Parametric Function Induction in Semi-Supervised Learning. AISTAT 2005
 
 # Authors: Clay Woolam <clay@woolam.org>
 # Licence: BSD
-
-import warnings
 from abc import ABCMeta, abstractmethod
 from scipy import sparse
 import numpy as np
@@ -63,6 +61,8 @@ from ..base import BaseEstimator, ClassifierMixin
 from ..metrics.pairwise import rbf_kernel
 from ..utils.graph import graph_laplacian
 from ..utils.extmath import safe_sparse_dot
+from ..utils.validation import check_X_y
+from ..externals import six
 from ..neighbors.unsupervised import NearestNeighbors
 
 
@@ -73,7 +73,8 @@ def _not_converged(y_truth, y_prediction, tol=1e-3):
     return np.abs(y_truth - y_prediction).sum() > tol
 
 
-class BaseLabelPropagation(BaseEstimator, ClassifierMixin):
+class BaseLabelPropagation(six.with_metaclass(ABCMeta, BaseEstimator,
+                                              ClassifierMixin)):
     """Base class for label propagation module.
 
     Parameters
@@ -94,17 +95,11 @@ class BaseLabelPropagation(BaseEstimator, ClassifierMixin):
     tol : float
         Convergence tolerance: threshold to consider the system at steady
         state
+
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, kernel='rbf', gamma=20, n_neighbors=7,
-                 alpha=1, max_iter=30, tol=1e-3, max_iters=None):
-
-        if not max_iters is None:
-            max_iter = max_iters
-            warnings.warn("Parameter max_iters has been renamed to"
-                 'max_iter'" and will be removed in release 0.14.",
-                  DeprecationWarning, stacklevel=2)
+                 alpha=1, max_iter=30, tol=1e-3):
 
         self.max_iter = max_iter
         self.tol = tol
@@ -128,7 +123,8 @@ class BaseLabelPropagation(BaseEstimator, ClassifierMixin):
                 self.nn_fit = NearestNeighbors(self.n_neighbors).fit(X)
             if y is None:
                 return self.nn_fit.kneighbors_graph(self.nn_fit._fit_X,
-                        self.n_neighbors, mode='connectivity')
+                                                    self.n_neighbors,
+                                                    mode='connectivity')
             else:
                 return self.nn_fit.kneighbors(y, return_distance=False)
         else:
@@ -210,10 +206,8 @@ class BaseLabelPropagation(BaseEstimator, ClassifierMixin):
         -------
         self : returns an instance of self.
         """
-        if sparse.isspmatrix(X):
-            self.X_ = X
-        else:
-            self.X_ = np.asarray(X)
+        X, y = check_X_y(X, y)
+        self.X_ = X
 
         # actual graph construction (implementations should override this)
         graph_matrix = self._build_graph()
@@ -249,19 +243,20 @@ class BaseLabelPropagation(BaseEstimator, ClassifierMixin):
         while (_not_converged(self.label_distributions_, l_previous, self.tol)
                 and remaining_iter > 1):
             l_previous = self.label_distributions_
-            self.label_distributions_ = safe_sparse_dot(graph_matrix,
-                    self.label_distributions_)
+            self.label_distributions_ = safe_sparse_dot(
+                graph_matrix, self.label_distributions_)
             # clamp
-            self.label_distributions_ = np.multiply(clamp_weights,
-                    self.label_distributions_) + y_static
+            self.label_distributions_ = np.multiply(
+                clamp_weights, self.label_distributions_) + y_static
             remaining_iter -= 1
 
         normalizer = np.sum(self.label_distributions_, axis=1)[:, np.newaxis]
         self.label_distributions_ /= normalizer
         # set the transduction item
         transduction = self.classes_[np.argmax(self.label_distributions_,
-                axis=1)]
+                                               axis=1)]
         self.transduction_ = transduction.ravel()
+        self.n_iter_ = self.max_iter - remaining_iter
         return self
 
 
@@ -285,6 +280,23 @@ class LabelPropagation(BaseLabelPropagation):
       Convergence tolerance: threshold to consider the system at steady
       state
 
+    Attributes
+    ----------
+    X_ : array, shape = [n_samples, n_features]
+        Input array.
+
+    classes_ : array, shape = [n_classes]
+        The distinct labels used in classifying instances.
+
+    label_distributions_ : array, shape = [n_samples, n_classes]
+        Categorical distribution for each item.
+
+    transduction_ : array, shape = [n_samples]
+        Label assigned to each item via the transduction.
+
+    n_iter_ : int
+        Number of iterations run.
+
     Examples
     --------
     >>> from sklearn import datasets
@@ -307,7 +319,7 @@ class LabelPropagation(BaseLabelPropagation):
 
     See Also
     --------
-    LabelSpreading : Alternate label proagation strategy more robust to noise
+    LabelSpreading : Alternate label propagation strategy more robust to noise
     """
     def _build_graph(self):
         """Matrix representing a fully connected graph between each sample
@@ -350,6 +362,23 @@ class LabelSpreading(BaseLabelPropagation):
       Convergence tolerance: threshold to consider the system at steady
       state
 
+    Attributes
+    ----------
+    X_ : array, shape = [n_samples, n_features]
+        Input array.
+
+    classes_ : array, shape = [n_classes]
+        The distinct labels used in classifying instances.
+
+    label_distributions_ : array, shape = [n_samples, n_classes]
+        Categorical distribution for each item.
+
+    transduction_ : array, shape = [n_samples]
+        Label assigned to each item via the transduction.
+
+    n_iter_ : int
+        Number of iterations run.
+
     Examples
     --------
     >>> from sklearn import datasets
@@ -367,7 +396,7 @@ class LabelSpreading(BaseLabelPropagation):
     References
     ----------
     Dengyong Zhou, Olivier Bousquet, Thomas Navin Lal, Jason Weston,
-    Bernhard Schölkopf. Learning with local and global consistency (2004)
+    Bernhard Schoelkopf. Learning with local and global consistency (2004)
     http://citeseer.ist.psu.edu/viewdoc/summary?doi=10.1.1.115.3219
 
     See Also
@@ -376,18 +405,13 @@ class LabelSpreading(BaseLabelPropagation):
     """
 
     def __init__(self, kernel='rbf', gamma=20, n_neighbors=7, alpha=0.2,
-                 max_iter=30, tol=1e-3, max_iters=None):
-
-        if not max_iters is None:
-            max_iter = max_iters
-            warnings.warn("Parameter max_iters has been renamed to"
-                 'max_iter'" and will be removed in release 0.14.",
-                  DeprecationWarning, stacklevel=2)
+                 max_iter=30, tol=1e-3):
 
         # this one has different base parameters
         super(LabelSpreading, self).__init__(kernel=kernel, gamma=gamma,
-                n_neighbors=n_neighbors, alpha=alpha,
-                max_iter=max_iter, tol=tol)
+                                             n_neighbors=n_neighbors,
+                                             alpha=alpha, max_iter=max_iter,
+                                             tol=tol)
 
     def _build_graph(self):
         """Graph matrix for Label Spreading computes the graph laplacian"""

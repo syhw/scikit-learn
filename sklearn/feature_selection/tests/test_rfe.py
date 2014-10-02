@@ -9,9 +9,13 @@ from scipy import sparse
 
 from sklearn.feature_selection.rfe import RFE, RFECV
 from sklearn.datasets import load_iris
-from sklearn.metrics import zero_one
+from sklearn.metrics import zero_one_loss
 from sklearn.svm import SVC
 from sklearn.utils import check_random_state
+from sklearn.utils.testing import ignore_warnings
+
+from sklearn.metrics.scorer import SCORERS
+from sklearn.metrics import make_scorer
 
 
 def test_rfe_set_params():
@@ -67,28 +71,43 @@ def test_rfecv():
     y = list(iris.target)   # regression test: list should be supported
 
     # Test using the score function
-    rfecv = RFECV(estimator=SVC(kernel="linear"), step=1, cv=3)
+    rfecv = RFECV(estimator=SVC(kernel="linear"), step=1, cv=5)
     rfecv.fit(X, y)
     # non-regression test for missing worst feature:
-    assert_equal(len(rfecv.cv_scores_), X.shape[1])
+    assert_equal(len(rfecv.grid_scores_), X.shape[1])
     assert_equal(len(rfecv.ranking_), X.shape[1])
     X_r = rfecv.transform(X)
 
+    # All the noisy variable were filtered out
+    assert_array_equal(X_r, iris.data)
+
     # same in sparse
-    rfecv_sparse = RFECV(estimator=SVC(kernel="linear"), step=1, cv=3)
+    rfecv_sparse = RFECV(estimator=SVC(kernel="linear"), step=1, cv=5)
     X_sparse = sparse.csr_matrix(X)
     rfecv_sparse.fit(X_sparse, y)
     X_r_sparse = rfecv_sparse.transform(X_sparse)
-
-    assert_equal(X_r.shape, iris.data.shape)
-    assert_array_almost_equal(X_r[:10], iris.data[:10])
-    assert_array_almost_equal(X_r_sparse.toarray(), X_r)
+    assert_array_equal(X_r_sparse.toarray(), iris.data)
 
     # Test using a customized loss function
-    rfecv = RFECV(estimator=SVC(kernel="linear"), step=1, cv=3,
-            loss_func=zero_one)
+    scoring = make_scorer(zero_one_loss, greater_is_better=False)
+    rfecv = RFECV(estimator=SVC(kernel="linear"), step=1, cv=5,
+                  scoring=scoring)
+    ignore_warnings(rfecv.fit)(X, y)
+    X_r = rfecv.transform(X)
+    assert_array_equal(X_r, iris.data)
+
+    # Test using a scorer
+    scorer = SCORERS['accuracy']
+    rfecv = RFECV(estimator=SVC(kernel="linear"), step=1, cv=5,
+                  scoring=scorer)
     rfecv.fit(X, y)
     X_r = rfecv.transform(X)
+    assert_array_equal(X_r, iris.data)
 
-    assert_equal(X_r.shape, iris.data.shape)
-    assert_array_almost_equal(X_r[:10], iris.data[:10])
+    # Test fix on grid_scores
+    def test_scorer(estimator, X, y):
+        return 1.0
+    rfecv = RFECV(estimator=SVC(kernel="linear"), step=1, cv=5,
+                  scoring=test_scorer)
+    rfecv.fit(X, y)
+    assert_array_equal(rfecv.grid_scores_, np.ones(len(rfecv.grid_scores_)))

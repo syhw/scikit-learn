@@ -1,6 +1,6 @@
 
 # Author: Gael Varoquaux
-# License: BSD
+# License: BSD 3 clause
 
 import numpy as np
 import scipy.sparse as sp
@@ -9,12 +9,14 @@ from sklearn.utils.testing import assert_array_equal
 from sklearn.utils.testing import assert_true
 from sklearn.utils.testing import assert_false
 from sklearn.utils.testing import assert_equal
+from sklearn.utils.testing import assert_not_equal
 from sklearn.utils.testing import assert_raises
 
 from sklearn.base import BaseEstimator, clone, is_classifier
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 from sklearn.grid_search import GridSearchCV
+from sklearn.utils import deprecated
 
 
 #############################################################################
@@ -36,6 +38,19 @@ class T(BaseEstimator):
     def __init__(self, a=None, b=None):
         self.a = a
         self.b = b
+
+
+class DeprecatedAttributeEstimator(BaseEstimator):
+    def __init__(self, a=None, b=None):
+        self.a = a
+        if b is not None:
+            DeprecationWarning("b is deprecated and renamed 'a'")
+            self.a = b
+
+    @property
+    @deprecated("Parameter 'b' is deprecated and renamed to 'a'")
+    def b(self):
+        return self._b
 
 
 class Buggy(BaseEstimator):
@@ -155,6 +170,19 @@ def test_get_params():
     assert_raises(ValueError, test.set_params, a__a=2)
 
 
+def test_get_params_deprecated():
+    # deprecated attribute should not show up as params
+    est = DeprecatedAttributeEstimator(a=1)
+
+    assert_true('a' in est.get_params())
+    assert_true('a' in est.get_params(deep=True))
+    assert_true('a' in est.get_params(deep=False))
+
+    assert_true('b' not in est.get_params())
+    assert_true('b' not in est.get_params(deep=True))
+    assert_true('b' not in est.get_params(deep=False))
+
+
 def test_is_classifier():
     svc = SVC()
     assert_true(is_classifier(svc))
@@ -175,3 +203,28 @@ def test_set_params():
     #bad_pipeline = Pipeline([("bad", NoEstimator())])
     #assert_raises(AttributeError, bad_pipeline.set_params,
             #bad__stupid_param=True)
+
+
+def test_score_sample_weight():
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.tree import DecisionTreeRegressor
+    from sklearn import datasets
+
+    rng = np.random.RandomState(0)
+
+    # test both ClassifierMixin and RegressorMixin
+    estimators = [DecisionTreeClassifier(max_depth=2),
+                  DecisionTreeRegressor(max_depth=2)]
+    sets = [datasets.load_iris(),
+            datasets.load_boston()]
+
+    for est, ds in zip(estimators, sets):
+        est.fit(ds.data, ds.target)
+        # generate random sample weights
+        sample_weight = rng.randint(1, 10, size=len(ds.target))
+        # check that the score with and without sample weights are different
+        assert_not_equal(est.score(ds.data, ds.target),
+                         est.score(ds.data, ds.target,
+                                   sample_weight=sample_weight),
+                         msg="Unweighted and weighted scores "
+                             "are unexpectedly equal")

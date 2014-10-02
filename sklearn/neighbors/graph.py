@@ -2,7 +2,7 @@
 
 # Author: Jake Vanderplas <vanderplas@astro.washington.edu>
 #
-# License: BSD, (C) INRIA, University of Amsterdam
+# License: BSD 3 clause (C) INRIA, University of Amsterdam
 
 from .base import KNeighborsMixin, RadiusNeighborsMixin
 from .unsupervised import NearestNeighbors
@@ -35,10 +35,10 @@ def kneighbors_graph(X, n_neighbors, mode='connectivity'):
     >>> X = [[0], [3], [1]]
     >>> from sklearn.neighbors import kneighbors_graph
     >>> A = kneighbors_graph(X, 2)
-    >>> A.todense()
-    matrix([[ 1.,  0.,  1.],
-            [ 0.,  1.,  1.],
-            [ 1.,  0.,  1.]])
+    >>> A.toarray()
+    array([[ 1.,  0.,  1.],
+           [ 0.,  1.,  1.],
+           [ 1.,  0.,  1.]])
 
     See also
     --------
@@ -79,10 +79,10 @@ def radius_neighbors_graph(X, radius, mode='connectivity'):
     >>> X = [[0], [3], [1]]
     >>> from sklearn.neighbors import radius_neighbors_graph
     >>> A = radius_neighbors_graph(X, 1.5)
-    >>> A.todense()
-    matrix([[ 1.,  0.,  1.],
-            [ 0.,  1.,  0.],
-            [ 1.,  0.,  1.]])
+    >>> A.toarray()
+    array([[ 1.,  0.,  1.],
+           [ 0.,  1.,  0.],
+           [ 1.,  0.,  1.]])
 
     See also
     --------

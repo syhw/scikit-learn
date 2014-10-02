@@ -1,11 +1,11 @@
 # Author: Mathieu Blondel
-# License: BSD Style.
+# License: BSD 3 clause
 
 from .stochastic_gradient import BaseSGDClassifier
-from ..feature_selection.selector_mixin import SelectorMixin
+from ..feature_selection.from_model import _LearntSelectorMixin
 
 
-class Perceptron(BaseSGDClassifier, SelectorMixin):
+class Perceptron(BaseSGDClassifier, _LearntSelectorMixin):
     """Perceptron
 
     Parameters
@@ -60,11 +60,11 @@ class Perceptron(BaseSGDClassifier, SelectorMixin):
 
     Attributes
     ----------
-    `coef_` : array, shape = [1, n_features] if n_classes == 2 else [n_classes,
+    coef_ : array, shape = [1, n_features] if n_classes == 2 else [n_classes,
     n_features]
         Weights assigned to the features.
 
-    `intercept_` : array, shape = [1] if n_classes == 2 else [n_classes]
+    intercept_ : array, shape = [1] if n_classes == 2 else [n_classes]
         Constants in decision function.
 
     Notes

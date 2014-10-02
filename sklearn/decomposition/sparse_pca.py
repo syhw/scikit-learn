@@ -1,10 +1,10 @@
 """Matrix factorization with Sparse PCA"""
 # Author: Vlad Niculae, Gael Varoquaux, Alexandre Gramfort
-# License: BSD
+# License: BSD 3 clause
 
 import numpy as np
 
-from ..utils import check_random_state, array2d
+from ..utils import check_random_state, check_array
 from ..linear_model import ridge_regression
 from ..base import BaseEstimator, TransformerMixin
 from .dict_learning import dict_learning, dict_learning_online
@@ -60,11 +60,14 @@ class SparsePCA(BaseEstimator, TransformerMixin):
 
     Attributes
     ----------
-    `components_` : array, [n_components, n_features]
+    components_ : array, [n_components, n_features]
         Sparse components extracted from the data.
 
-    `error_` : array
+    error_ : array
         Vector of errors at each iteration.
+
+    n_iter_ : int
+        Number of iterations run.
 
     See also
     --------
@@ -73,8 +76,8 @@ class SparsePCA(BaseEstimator, TransformerMixin):
     DictionaryLearning
     """
     def __init__(self, n_components=None, alpha=1, ridge_alpha=0.01,
-            max_iter=1000, tol=1e-8, method='lars', n_jobs=1, U_init=None,
-            V_init=None, verbose=False, random_state=None):
+                 max_iter=1000, tol=1e-8, method='lars', n_jobs=1, U_init=None,
+                 V_init=None, verbose=False, random_state=None):
         self.n_components = n_components
         self.alpha = alpha
         self.ridge_alpha = ridge_alpha
@@ -101,21 +104,25 @@ class SparsePCA(BaseEstimator, TransformerMixin):
         self : object
             Returns the instance itself.
         """
-        self.random_state = check_random_state(self.random_state)
-        X = array2d(X)
+        random_state = check_random_state(self.random_state)
+        X = check_array(X)
         if self.n_components is None:
             n_components = X.shape[1]
         else:
             n_components = self.n_components
         code_init = self.V_init.T if self.V_init is not None else None
         dict_init = self.U_init.T if self.U_init is not None else None
-        Vt, _, E = dict_learning(X.T, n_components, self.alpha,
-                                 tol=self.tol, max_iter=self.max_iter,
-                                 method=self.method, n_jobs=self.n_jobs,
-                                 verbose=self.verbose,
-                                 random_state=self.random_state,
-                                 code_init=code_init,
-                                 dict_init=dict_init)
+        Vt, _, E, self.n_iter_ = dict_learning(X.T, n_components, self.alpha,
+                                               tol=self.tol,
+                                               max_iter=self.max_iter,
+                                               method=self.method,
+                                               n_jobs=self.n_jobs,
+                                               verbose=self.verbose,
+                                               random_state=random_state,
+                                               code_init=code_init,
+                                               dict_init=dict_init,
+                                               return_n_iter=True
+                                               )
         self.components_ = Vt.T
         self.error_ = E
         return self
@@ -145,9 +152,10 @@ class SparsePCA(BaseEstimator, TransformerMixin):
         X_new array, shape (n_samples, n_components)
             Transformed data.
         """
+        X = check_array(X)
         ridge_alpha = self.ridge_alpha if ridge_alpha is None else ridge_alpha
         U = ridge_regression(self.components_.T, X.T, ridge_alpha,
-                             solver='dense_cholesky')
+                             solver='cholesky')
         s = np.sqrt((U ** 2).sum(axis=0))
         s[s == 0] = 1
         U /= s
@@ -180,7 +188,7 @@ class MiniBatchSparsePCA(SparsePCA):
     callback : callable,
         callable that gets invoked every five iterations
 
-    chunk_size : int,
+    batch_size : int,
         the number of features to take in each mini batch
 
     verbose :
@@ -204,11 +212,14 @@ class MiniBatchSparsePCA(SparsePCA):
 
     Attributes
     ----------
-    `components_` : array, [n_components, n_features]
+    components_ : array, [n_components, n_features]
         Sparse components extracted from the data.
 
-    `error_` : array
+    error_ : array
         Vector of errors at each iteration.
+
+    n_iter_ : int
+        Number of iterations run.
 
     See also
     --------
@@ -217,14 +228,15 @@ class MiniBatchSparsePCA(SparsePCA):
     DictionaryLearning
     """
     def __init__(self, n_components=None, alpha=1, ridge_alpha=0.01,
-            n_iter=100, callback=None, chunk_size=3, verbose=False,
-            shuffle=True, n_jobs=1, method='lars', random_state=None):
+                 n_iter=100, callback=None, batch_size=3, verbose=False,
+                 shuffle=True, n_jobs=1, method='lars', random_state=None):
+
         self.n_components = n_components
         self.alpha = alpha
         self.ridge_alpha = ridge_alpha
         self.n_iter = n_iter
         self.callback = callback
-        self.chunk_size = chunk_size
+        self.batch_size = batch_size
         self.verbose = verbose
         self.shuffle = shuffle
         self.n_jobs = n_jobs
@@ -245,19 +257,22 @@ class MiniBatchSparsePCA(SparsePCA):
         self : object
             Returns the instance itself.
         """
-        self.random_state = check_random_state(self.random_state)
-        X = array2d(X)
+        random_state = check_random_state(self.random_state)
+        X = check_array(X)
         if self.n_components is None:
             n_components = X.shape[1]
         else:
             n_components = self.n_components
-        Vt, _ = dict_learning_online(X.T, n_components, alpha=self.alpha,
-                                     n_iter=self.n_iter, return_code=True,
-                                     dict_init=None, verbose=self.verbose,
-                                     callback=self.callback,
-                                     chunk_size=self.chunk_size,
-                                     shuffle=self.shuffle,
-                                     n_jobs=self.n_jobs, method=self.method,
-                                     random_state=self.random_state)
+        Vt, _, self.n_iter_ = dict_learning_online(
+            X.T, n_components, alpha=self.alpha,
+            n_iter=self.n_iter, return_code=True,
+            dict_init=None, verbose=self.verbose,
+            callback=self.callback,
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            n_jobs=self.n_jobs, method=self.method,
+            random_state=random_state,
+            return_n_iter=True
+            )
         self.components_ = Vt.T
         return self

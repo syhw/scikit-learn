@@ -4,7 +4,9 @@ from io import BytesIO
 import numpy as np
 import os
 import shutil
-import tempfile
+from tempfile import NamedTemporaryFile
+
+from sklearn.externals.six import b
 
 from sklearn.utils.testing import assert_equal
 from sklearn.utils.testing import assert_array_equal
@@ -89,12 +91,12 @@ def test_load_svmlight_files():
 
 
 def test_load_svmlight_file_n_features():
-    X, y = load_svmlight_file(datafile, n_features=20)
+    X, y = load_svmlight_file(datafile, n_features=22)
 
     # test X'shape
     assert_equal(X.indptr.shape[0], 7)
     assert_equal(X.shape[0], 6)
-    assert_equal(X.shape[1], 20)
+    assert_equal(X.shape[1], 22)
 
     # test X's non-zero values
     for i, j, val in ((0, 2, 2.5), (0, 10, -5.2),
@@ -102,27 +104,28 @@ def test_load_svmlight_file_n_features():
 
         assert_equal(X[i, j], val)
 
+    # 21 features in file
+    assert_raises(ValueError, load_svmlight_file, datafile, n_features=20)
+
 
 def test_load_compressed():
     X, y = load_svmlight_file(datafile)
 
-    try:
-        tempdir = tempfile.mkdtemp(prefix="sklearn-test")
+    with NamedTemporaryFile(prefix="sklearn-test", suffix=".gz") as tmp:
+        tmp.close()  # necessary under windows
+        with open(datafile, "rb") as f:
+            shutil.copyfileobj(f, gzip.open(tmp.name, "wb"))
+        Xgz, ygz = load_svmlight_file(tmp.name)
+    assert_array_equal(X.toarray(), Xgz.toarray())
+    assert_array_equal(y, ygz)
 
-        tmpgz = os.path.join(tempdir, "datafile.gz")
-        shutil.copyfileobj(open(datafile, "rb"), gzip.open(tmpgz, "wb"))
-        Xgz, ygz = load_svmlight_file(tmpgz)
-        assert_array_equal(X.toarray(), Xgz.toarray())
-        assert_array_equal(y, ygz)
-
-        tmpbz = os.path.join(tempdir, "datafile.bz2")
-        shutil.copyfileobj(open(datafile, "rb"), BZ2File(tmpbz, "wb"))
-        Xbz, ybz = load_svmlight_file(tmpgz)
-        assert_array_equal(X.toarray(), Xbz.toarray())
-        assert_array_equal(y, ybz)
-    except:
-        shutil.rmtree(tempdir)
-        raise
+    with NamedTemporaryFile(prefix="sklearn-test", suffix=".bz2") as tmp:
+        tmp.close()  # necessary under windows
+        with open(datafile, "rb") as f:
+            shutil.copyfileobj(f, BZ2File(tmp.name, "wb"))
+        Xbz, ybz = load_svmlight_file(tmp.name)
+    assert_array_equal(X.toarray(), Xbz.toarray())
+    assert_array_equal(y, ybz)
 
 
 @raises(ValueError)
@@ -137,13 +140,13 @@ def test_load_invalid_order_file():
 
 @raises(ValueError)
 def test_load_zero_based():
-    f = BytesIO("-1 4:1.\n1 0:1\n")
+    f = BytesIO(b("-1 4:1.\n1 0:1\n"))
     load_svmlight_file(f, zero_based=False)
 
 
 def test_load_zero_based_auto():
-    data1 = "-1 1:1 2:2 3:3\n"
-    data2 = "-1 0:0 1:1\n"
+    data1 = b("-1 1:1 2:2 3:3\n")
+    data2 = b("-1 0:0 1:1\n")
 
     f1 = BytesIO(data1)
     X, y = load_svmlight_file(f1, zero_based="auto")
@@ -158,19 +161,19 @@ def test_load_zero_based_auto():
 
 def test_load_with_qid():
     # load svmfile with qid attribute
-    data = """
+    data = b("""
     3 qid:1 1:0.53 2:0.12
     2 qid:1 1:0.13 2:0.1
-    7 qid:2 1:0.87 2:0.12"""
+    7 qid:2 1:0.87 2:0.12""")
     X, y = load_svmlight_file(BytesIO(data), query_id=False)
     assert_array_equal(y, [3, 2, 7])
-    assert_array_equal(X.todense(), [[.53, .12], [.13, .1], [.87, .12]])
+    assert_array_equal(X.toarray(), [[.53, .12], [.13, .1], [.87, .12]])
     res1 = load_svmlight_files([BytesIO(data)], query_id=True)
     res2 = load_svmlight_file(BytesIO(data), query_id=True)
     for X, y, qid in (res1, res2):
         assert_array_equal(y, [3, 2, 7])
         assert_array_equal(qid, [1, 1, 2])
-        assert_array_equal(X.todense(), [[.53, .12], [.13, .1], [.87, .12]])
+        assert_array_equal(X.toarray(), [[.53, .12], [.13, .1], [.87, .12]])
 
 
 @raises(ValueError)
@@ -194,22 +197,41 @@ def test_dump():
     Xs, y = load_svmlight_file(datafile)
     Xd = Xs.toarray()
 
-    for X in (Xs, Xd):
+    # slicing a csr_matrix can unsort its .indices, so test that we sort
+    # those correctly
+    Xsliced = Xs[np.arange(Xs.shape[0])]
+
+    for X in (Xs, Xd, Xsliced):
         for zero_based in (True, False):
-            for dtype in [np.float32, np.float64]:
+            for dtype in [np.float32, np.float64, np.int32]:
                 f = BytesIO()
-                dump_svmlight_file(X.astype(dtype), y, f,
+                # we need to pass a comment to get the version info in;
+                # LibSVM doesn't grok comments so they're not put in by
+                # default anymore.
+                dump_svmlight_file(X.astype(dtype), y, f, comment="test",
                                    zero_based=zero_based)
                 f.seek(0)
 
                 comment = f.readline()
+                try:
+                    comment = str(comment, "utf-8")
+                except TypeError:  # fails in Python 2.x
+                    pass
+
                 assert_in("scikit-learn %s" % sklearn.__version__, comment)
+
                 comment = f.readline()
+                try:
+                    comment = str(comment, "utf-8")
+                except TypeError:  # fails in Python 2.x
+                    pass
+
                 assert_in(["one", "zero"][zero_based] + "-based", comment)
 
                 X2, y2 = load_svmlight_file(f, dtype=dtype,
                                             zero_based=zero_based)
                 assert_equal(X2.dtype, dtype)
+                assert_array_equal(X2.sorted_indices().indices, X2.indices)
                 if dtype == np.float32:
                     assert_array_almost_equal(
                         # allow a rounding error at the last decimal place
@@ -219,6 +241,36 @@ def test_dump():
                         # allow a rounding error at the last decimal place
                         Xd.astype(dtype), X2.toarray(), 15)
                 assert_array_equal(y, y2)
+
+
+def test_dump_concise():
+    one = 1
+    two = 2.1
+    three = 3.01
+    exact = 1.000000000000001
+    # loses the last decimal place
+    almost = 1.0000000000000001
+    X = [[one, two, three, exact, almost],
+         [1e9, 2e18, 3e27, 0, 0],
+         [0, 0, 0, 0, 0],
+         [0, 0, 0, 0, 0],
+         [0, 0, 0, 0, 0]]
+    y = [one, two, three, exact, almost]
+    f = BytesIO()
+    dump_svmlight_file(X, y, f)
+    f.seek(0)
+    # make sure it's using the most concise format possible
+    assert_equal(f.readline(),
+                 b("1 0:1 1:2.1 2:3.01 3:1.000000000000001 4:1\n"))
+    assert_equal(f.readline(), b("2.1 0:1000000000 1:2e+18 2:3e+27\n"))
+    assert_equal(f.readline(), b("3.01 \n"))
+    assert_equal(f.readline(), b("1.000000000000001 \n"))
+    assert_equal(f.readline(), b("1 \n"))
+    f.seek(0)
+    # make sure it's correct too :)
+    X2, y2 = load_svmlight_file(f)
+    assert_array_almost_equal(X, X2.toarray())
+    assert_array_equal(y, y2)
 
 
 def test_dump_comment():
@@ -235,7 +287,7 @@ def test_dump_comment():
     assert_array_equal(y, y2)
 
     # XXX we have to update this to support Python 3.x
-    utf8_comment = "It is true that\n\xc2\xbd\xc2\xb2 = \xc2\xbc"
+    utf8_comment = b("It is true that\n\xc2\xbd\xc2\xb2 = \xc2\xbc")
     f = BytesIO()
     assert_raises(UnicodeDecodeError,
                   dump_svmlight_file, X, y, f, comment=utf8_comment)

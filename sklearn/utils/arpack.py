@@ -45,6 +45,7 @@ Uses ARPACK: http://www.caam.rice.edu/software/ARPACK/
 __docformat__ = "restructuredtext en"
 
 __all__ = ['eigs', 'eigsh', 'svds', 'ArpackError', 'ArpackNoConvergence']
+import warnings
 
 from scipy.sparse.linalg.eigen.arpack import _arpack
 import numpy as np
@@ -81,9 +82,9 @@ DNAUPD_ERRORS = {
     -8: "Error return from LAPACK eigenvalue calculation;",
     -9: "Starting vector is zero.",
     -10: "IPARAM(7) must be 1,2,3,4.",
-    -11: "IPARAM(7) = 1 and BMAT = 'G' are incompatable.",
+    -11: "IPARAM(7) = 1 and BMAT = 'G' are incompatible.",
     -12: "IPARAM(1) must be equal to 0 or 1.",
-    -13: "NEV and WHICH = 'BE' are incompatable.",
+    -13: "NEV and WHICH = 'BE' are incompatible.",
     -9999: "Could not build an Arnoldi factorization. "
            "IPARAM(5) returns the size of the current Arnoldi "
            "factorization. The user is advised to check that "
@@ -118,9 +119,9 @@ DSAUPD_ERRORS = {
         "Informational error from LAPACK routine dsteqr .",
     -9: "Starting vector is zero.",
     -10: "IPARAM(7) must be 1,2,3,4,5.",
-    -11: "IPARAM(7) = 1 and BMAT = 'G' are incompatable.",
+    -11: "IPARAM(7) = 1 and BMAT = 'G' are incompatible.",
     -12: "IPARAM(1) must be equal to 0 or 1.",
-    -13: "NEV and WHICH = 'BE' are incompatable. ",
+    -13: "NEV and WHICH = 'BE' are incompatible. ",
     -9999: "Could not build an Arnoldi factorization. "
            "IPARAM(5) returns the size of the current Arnoldi "
            "factorization. The user is advised to check that "
@@ -137,7 +138,7 @@ DNEUPD_ERRORS = {
        "increase the size of the arrays DR and DI to have "
        "dimension at least dimension NCV and allocate at least NCV "
        "columns for Z. NOTE: Not necessary if Z and V share "
-       "the same space. Please notify the authors if this error"
+       "the same space. Please notify the authors if this error "
        "occurs.",
     -1: "N must be positive.",
     -2: "NEV must be positive.",
@@ -208,8 +209,7 @@ ZNEUPD_ERRORS = {0: "Normal exit.",
                       "converged Ritz values than ZNAUPD got.  This "
                       "indicates the user probably made an error in passing "
                       "data from ZNAUPD to ZNEUPD or that the data was "
-                      "modified before entering ZNEUPD"
-}
+                      "modified before entering ZNEUPD"}
 
 CNEUPD_ERRORS = ZNEUPD_ERRORS.copy()
 CNEUPD_ERRORS[-14] = ("CNAUPD did not find any eigenvalues to sufficient "
@@ -763,11 +763,11 @@ class _UnsymmetricArpackParams(_ArpackParams):
             di = np.zeros(k + 1, self.tp)
             zr = np.zeros((n, k + 1), self.tp)
             dr, di, zr, ierr = \
-                self._arpack_extract(return_eigenvectors,
-                       howmny, sselect, sigmar, sigmai, workev,
-                       self.bmat, self.which, k, self.tol, self.resid,
-                       self.v, self.iparam, self.ipntr,
-                       self.workd, self.workl, self.info)
+                self._arpack_extract(
+                    return_eigenvectors, howmny, sselect, sigmar, sigmai,
+                    workev, self.bmat, self.which, k, self.tol, self.resid,
+                    self.v, self.iparam, self.ipntr, self.workd, self.workl,
+                    self.info)
             if ierr != 0:
                 raise ArpackError(ierr, infodict=self.extract_infodict)
             nreturned = self.iparam[4]  # number of good eigenvalues returned
@@ -862,11 +862,11 @@ class _UnsymmetricArpackParams(_ArpackParams):
         else:
             # complex is so much simpler...
             d, z, ierr =\
-                    self._arpack_extract(return_eigenvectors,
-                           howmny, sselect, self.sigma, workev,
-                           self.bmat, self.which, k, self.tol, self.resid,
-                           self.v, self.iparam, self.ipntr,
-                           self.workd, self.workl, self.rwork, ierr)
+                self._arpack_extract(
+                    return_eigenvectors, howmny, sselect, self.sigma, workev,
+                    self.bmat, self.which, k, self.tol, self.resid, self.v,
+                    self.iparam, self.ipntr, self.workd, self.workl,
+                    self.rwork, ierr)
 
             if ierr != 0:
                 raise ArpackError(ierr, infodict=self.extract_infodict)
@@ -1018,7 +1018,7 @@ def get_OPinv_matvec(A, M, sigma, symmetric=False, tol=0):
         #M is the identity matrix
         if isdense(A):
             if (np.issubdtype(A.dtype, np.complexfloating)
-                or np.imag(sigma) == 0):
+                    or np.imag(sigma) == 0):
                 A = np.copy(A)
             else:
                 A = A + 0j
@@ -1030,14 +1030,14 @@ def get_OPinv_matvec(A, M, sigma, symmetric=False, tol=0):
                 A = A.T
             return SpLuInv(A.tocsc()).matvec
         else:
-            return IterOpInv(_aslinearoperator_with_dtype(A),
-                              M, sigma, tol=tol).matvec
+            return IterOpInv(_aslinearoperator_with_dtype(A), M, sigma,
+                             tol=tol).matvec
     else:
         if ((not isdense(A) and not isspmatrix(A)) or
-            (not isdense(M) and not isspmatrix(M))):
+                (not isdense(M) and not isspmatrix(M))):
             return IterOpInv(_aslinearoperator_with_dtype(A),
-                              _aslinearoperator_with_dtype(M),
-                              sigma, tol=tol).matvec
+                             _aslinearoperator_with_dtype(M), sigma,
+                             tol=tol).matvec
         elif isdense(A) or isdense(M):
             return LuInv(A - sigma * M).matvec
         else:
@@ -1047,9 +1047,9 @@ def get_OPinv_matvec(A, M, sigma, symmetric=False, tol=0):
             return SpLuInv(OP.tocsc()).matvec
 
 
-def _eigs(A, k=6, M=None, sigma=None, which='LM', v0=None,
-         ncv=None, maxiter=None, tol=0, return_eigenvectors=True,
-         Minv=None, OPinv=None, OPpart=None):
+def _eigs(A, k=6, M=None, sigma=None, which='LM', v0=None, ncv=None,
+          maxiter=None, tol=0, return_eigenvectors=True, Minv=None, OPinv=None,
+          OPpart=None):
     """
     Find k eigenvalues and eigenvectors of the square matrix A.
 
@@ -1188,7 +1188,6 @@ def _eigs(A, k=6, M=None, sigma=None, which='LM', v0=None,
             raise ValueError('wrong M dimensions %s, should be %s'
                              % (M.shape, A.shape))
         if np.dtype(M.dtype).char.lower() != np.dtype(A.dtype).char.lower():
-            import warnings
             warnings.warn('M does not have the same type precision as A. '
                           'This may adversely affect ARPACK convergence')
     n = A.shape[0]
@@ -1263,9 +1262,9 @@ def _eigs(A, k=6, M=None, sigma=None, which='LM', v0=None,
     return params.extract(return_eigenvectors)
 
 
-def _eigsh(A, k=6, M=None, sigma=None, which='LM', v0=None,
-          ncv=None, maxiter=None, tol=0, return_eigenvectors=True,
-          Minv=None, OPinv=None, mode='normal'):
+def _eigsh(A, k=6, M=None, sigma=None, which='LM', v0=None, ncv=None,
+           maxiter=None, tol=0, return_eigenvectors=True, Minv=None,
+           OPinv=None, mode='normal'):
     """
     Find k eigenvalues and eigenvectors of the real symmetric square matrix
     or complex hermitian matrix A.
@@ -1409,7 +1408,7 @@ def _eigsh(A, k=6, M=None, sigma=None, which='LM', v0=None,
     >>> vals, vecs = eigsh(id, k=6)
     >>> vals # doctest: +SKIP
     array([ 1.+0.j,  1.+0.j,  1.+0.j,  1.+0.j,  1.+0.j,  1.+0.j])
-    >>> print vecs.shape
+    >>> print(vecs.shape)
     (13, 6)
 
     References
@@ -1447,7 +1446,6 @@ def _eigsh(A, k=6, M=None, sigma=None, which='LM', v0=None,
             raise ValueError('wrong M dimensions %s, should be %s'
                              % (M.shape, A.shape))
         if np.dtype(M.dtype).char.lower() != np.dtype(A.dtype).char.lower():
-            import warnings
             warnings.warn('M does not have the same type precision as A. '
                           'This may adversely affect ARPACK convergence')
     n = A.shape[0]
@@ -1580,22 +1578,36 @@ def _svds(A, k=6, ncv=None, tol=0):
         XH = A
         X = herm(A)
 
-    def matvec_XH_X(x):
-        return XH.dot(X.dot(x))
+    if hasattr(XH, 'dot'):
+        def matvec_XH_X(x):
+            return XH.dot(X.dot(x))
+    else:
+        def matvec_XH_X(x):
+            return np.dot(XH, np.dot(X, x))
 
     XH_X = LinearOperator(matvec=matvec_XH_X, dtype=X.dtype,
                           shape=(X.shape[1], X.shape[1]))
 
-    eigvals, eigvec = eigensolver(XH_X, k=k, tol=tol ** 2)
+    # Ignore deprecation warnings here: dot on matrices is deprecated,
+    # but this code is a backport anyhow
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', DeprecationWarning)
+        eigvals, eigvec = eigensolver(XH_X, k=k, tol=tol ** 2)
     s = np.sqrt(eigvals)
 
     if n > m:
         v = eigvec
-        u = X.dot(v) / s
+        if hasattr(X, 'dot'):
+            u = X.dot(v) / s
+        else:
+            u = np.dot(X, v) / s
         vh = herm(v)
     else:
         u = eigvec
-        vh = herm(X.dot(u) / s)
+        if hasattr(X, 'dot'):
+            vh = herm(X.dot(u) / s)
+        else:
+            vh = herm(np.dot(X, u) / s)
 
     return u, s, vh
 

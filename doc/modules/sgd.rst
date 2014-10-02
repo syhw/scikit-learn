@@ -1,4 +1,3 @@
-
 .. _sgd:
 
 ===========================
@@ -47,7 +46,7 @@ The class :class:`SGDClassifier` implements a plain stochastic gradient
 descent learning routine which supports different loss functions and
 penalties for classification.
 
-.. figure:: ../auto_examples/linear_model/images/plot_sgd_separating_hyperplane_1.png
+.. figure:: ../auto_examples/linear_model/images/plot_sgd_separating_hyperplane_001.png
    :target: ../auto_examples/linear_model/plot_sgd_separating_hyperplane.html
    :align: center
    :scale: 75
@@ -65,8 +64,7 @@ for the training samples::
     SGDClassifier(alpha=0.0001, class_weight=None, epsilon=0.1, eta0=0.0,
            fit_intercept=True, l1_ratio=0.15, learning_rate='optimal',
            loss='hinge', n_iter=5, n_jobs=1, penalty='l2', power_t=0.5,
-           random_state=None, rho=None, shuffle=False, verbose=0,
-           warm_start=False)
+           random_state=None, shuffle=False, verbose=0, warm_start=False)
 
 
 After being fitted, the model can then be used to predict new values::
@@ -78,7 +76,7 @@ SGD fits a linear model to the training data. The member ``coef_`` holds
 the model parameters::
 
     >>> clf.coef_
-    array([[ 9.90090187,  9.90090187]])
+    array([[ 9.91080278,  9.91080278]])
 
 Member ``intercept_`` holds the intercept (aka offset or bias)::
 
@@ -91,14 +89,14 @@ hyperplane, is controlled by the parameter ``fit_intercept``.
 To get the signed distance to the hyperplane use :meth:`SGDClassifier.decision_function`::
 
     >>> clf.decision_function([[2., 2.]])
-    array([ 29.61357756])
+    array([ 29.65318117])
 
 The concrete loss function can be set via the ``loss``
 parameter. :class:`SGDClassifier` supports the following loss functions:
 
   * ``loss="hinge"``: (soft-margin) linear Support Vector Machine,
   * ``loss="modified_huber"``: smoothed hinge loss,
-  * ``loss="log"``: Logistic Regression,
+  * ``loss="log"``: logistic regression,
   * and all regression losses below.
 
 The first two loss functions are lazy, they only update the model
@@ -106,42 +104,44 @@ parameters if an example violates the margin constraint, which makes
 training very efficient and may result in sparser models, even when L2 penalty
 is used.
 
-In the case of binary classification and ``loss="log"`` or
-``loss="modified_huber"`` you get a probability estimate :math:`P(y=C|x)` using
-:meth:`SGDClassifier.predict_proba`, where `C` is the largest class label::
+Using ``loss="log"`` or ``loss="modified_huber"`` enables the
+``predict_proba`` method, which gives a vector of probability estimates
+:math:`P(y|x)` per sample :math:`x`::
 
     >>> clf = SGDClassifier(loss="log").fit(X, y)
     >>> clf.predict_proba([[1., 1.]])
-    array([[ 0.00000051,  0.99999949]])
+    array([[ 0.0000005,  0.9999995]])
 
 The concrete penalty can be set via the ``penalty`` parameter.
 SGD supports the following penalties:
 
   * ``penalty="l2"``: L2 norm penalty on ``coef_``.
   * ``penalty="l1"``: L1 norm penalty on ``coef_``.
-  * ``penalty="elasticnet"``: Convex combination of L2 and L1; `rho * L2 + (1 - rho) * L1`.
+  * ``penalty="elasticnet"``: Convex combination of L2 and L1;
+    ``(1 - l1_ratio) * L2 + l1_ratio * L1``.
 
 The default setting is ``penalty="l2"``. The L1 penalty leads to sparse
 solutions, driving most coefficients to zero. The Elastic Net solves
 some deficiencies of the L1 penalty in the presence of highly correlated
-attributes. The parameter ``rho`` has to be specified by the user.
+attributes. The parameter ``l1_ratio`` controls the convex combination
+of L1 and L2 penalty.
 
 :class:`SGDClassifier` supports multi-class classification by combining
 multiple binary classifiers in a "one versus all" (OVA) scheme. For each
-of the `K` classes, a binary classifier is learned that discriminates
-between that and all other `K-1` classes. At testing time, we compute the
+of the :math:`K` classes, a binary classifier is learned that discriminates
+between that and all other :math:`K-1` classes. At testing time, we compute the
 confidence score (i.e. the signed distances to the hyperplane) for each
 classifier and choose the class with the highest confidence. The Figure
 below illustrates the OVA approach on the iris dataset.  The dashed
 lines represent the three OVA classifiers; the background colors show
 the decision surface induced by the three classifiers.
 
-.. figure:: ../auto_examples/linear_model/images/plot_sgd_iris_1.png
+.. figure:: ../auto_examples/linear_model/images/plot_sgd_iris_001.png
    :target: ../auto_examples/linear_model/plot_sgd_iris.html
    :align: center
    :scale: 75
 
-In the case of multi-class classification ``coef_`` is a two-dimensionaly
+In the case of multi-class classification ``coef_`` is a two-dimensionally
 array of ``shape=[n_classes, n_features]`` and ``intercept_`` is a one
 dimensional array of ``shape=[n_classes]``. The i-th row of ``coef_`` holds
 the weight vector of the OVA classifier for the i-th class; classes are
@@ -159,8 +159,8 @@ further information.
 
  - :ref:`example_linear_model_plot_sgd_separating_hyperplane.py`,
  - :ref:`example_linear_model_plot_sgd_iris.py`
- - :ref:`example_linear_model_plot_sgd_weighted_classes.py`
  - :ref:`example_linear_model_plot_sgd_weighted_samples.py`
+ - :ref:`example_svm_plot_separating_hyperplane_unbalanced.py` (See the `Note`)
 
 Regression
 ==========
@@ -171,11 +171,6 @@ penalties to fit linear regression models. :class:`SGDRegressor` is
 well suited for regression problems with a large number of training
 samples (> 10.000), for other problems we recommend :class:`Ridge`,
 :class:`Lasso`, or :class:`ElasticNet`.
-
-.. figure:: ../auto_examples/linear_model/images/plot_sgd_ols_1.png
-   :target: ../auto_examples/linear_model/plot_sgd_ols.html
-   :align: center
-   :scale: 75
 
 The concrete loss function can be set via the ``loss``
 parameter. :class:`SGDRegressor` supports the following loss functions:
@@ -188,10 +183,6 @@ The Huber and epsilon-insensitive loss functions can be used for
 robust regression. The width of the insensitive region has to be
 specified via the parameter ``epsilon``. This parameter depends on the
 scale of the target variables.
-
-.. topic:: Examples:
-
- - :ref:`example_linear_model_plot_sgd_ols.py`,
 
 
 Stochastic Gradient Descent for sparse data
@@ -208,7 +199,7 @@ matrix format as defined in `scipy.sparse.csr_matrix
 
 .. topic:: Examples:
 
- - :ref:`example_document_classification_20newsgroups.py`
+ - :ref:`example_text_document_classification_20newsgroups.py`
 
 Complexity
 ==========
@@ -276,7 +267,7 @@ training error given by
 
 .. math::
 
-    E(w,b) = \sum_{i=1}^{n} L(y_i, f(x_i)) + \alpha R(w)
+    E(w,b) = \frac{1}{n}\sum_{i=1}^{n} L(y_i, f(x_i)) + \alpha R(w)
 
 where :math:`L` is a loss function that measures model (mis)fit and
 :math:`R` is a regularization term (aka penalty) that penalizes model
@@ -292,7 +283,7 @@ Different choices for :math:`L` entail different classifiers such as
 All of the above loss functions can be regarded as an upper bound on the
 misclassification error (Zero-one loss) as shown in the Figure below.
 
-.. figure:: ../auto_examples/linear_model/images/plot_sgd_loss_functions_1.png
+.. figure:: ../auto_examples/linear_model/images/plot_sgd_loss_functions_001.png
    :align: center
    :scale: 75
 
@@ -301,12 +292,12 @@ Popular choices for the regularization term :math:`R` include:
    - L2 norm: :math:`R(w) := \frac{1}{2} \sum_{i=1}^{n} w_i^2`,
    - L1 norm: :math:`R(w) := \sum_{i=1}^{n} |w_i|`, which leads to sparse
      solutions.
-   - Elastic Net: :math:`R(w) := \rho \frac{1}{2} \sum_{i=1}^{n} w_i^2 + (1-\rho) \sum_{i=1}^{n} |w_i|`, a convex combination of L2 and L1.
+   - Elastic Net: :math:`R(w) := \frac{\rho}{2} \sum_{i=1}^{n} w_i^2 + (1-\rho) \sum_{i=1}^{n} |w_i|`, a convex combination of L2 and L1, where :math:`\rho` is given by ``1 - l1_ratio``.
 
 The Figure below shows the contours of the different regularization terms
 in the parameter space when :math:`R(w) = 1`.
 
-.. figure:: ../auto_examples/linear_model/images/plot_sgd_penalties_1.png
+.. figure:: ../auto_examples/linear_model/images/plot_sgd_penalties_001.png
    :align: center
    :scale: 75
 
@@ -346,14 +337,14 @@ size of the weights (this assuming that the norm of the training samples is
 approx. 1). The exact definition can be found in ``_init_t`` in :class:`BaseSGD`.
 
 
-For regression, the default learning rate schedule, inverse scaling
-(``learning_rate='invscaling'``), is given by
+For regression the default learning rate schedule is inverse scaling
+(``learning_rate='invscaling'``), given by
 
 .. math::
 
     \eta^{(t)} = \frac{eta_0}{t^{power\_t}}
 
-where :math:`eta_0` and :math:`power\_t` are hyperparameters choosen by the
+where :math:`eta_0` and :math:`power\_t` are hyperparameters chosen by the
 user via ``eta0`` and ``power_t``, resp.
 
 For a constant learning rate use ``learning_rate='constant'`` and use ``eta0``

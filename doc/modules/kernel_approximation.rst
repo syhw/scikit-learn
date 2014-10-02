@@ -19,21 +19,38 @@ can be better suited for online learning and can significantly reduce the cost
 of learning with very large datasets.
 Standard kernelized SVMs do not scale well to large datasets, but using an
 approximate kernel map it is possible to use much more efficient linear SVMs.
-In particularly the combination of kernel map approximations with
-:class:`SGDClassifier` can make nonlinear learning on large datasets possible.
+In particular, the combination of kernel map approximations with
+:class:`SGDClassifier` can make non-linear learning on large datasets possible.
 
 Since there has not been much empirical work using approximate embeddings, it
 is advisable to compare results against exact kernel methods when possible.
+
+.. seealso
+
+   :ref:`polynomial_regression` for an exact polynomial transformation.
+
+.. currentmodule:: sklearn.kernel_approximation
+
+.. _nystroem_kernel_approx:
+
+Nystroem Method for Kernel Approximation
+----------------------------------------
+The Nystroem method, as implemented in :class:`Nystroem` is a general method
+for low-rank approximations of kernels. It achieves this by essentially subsampling
+the data on which the kernel is evaluated.
+By default :class:`Nystroem` uses the ``rbf`` kernel, but it can use any
+kernel function or a precomputed kernel matrix.
+The number of samples used - which is also the dimensionality of the features computed -
+is given by the parameter ``n_components``.
 
 
 Radial Basis Function Kernel
 ----------------------------
 
-.. currentmodule:: sklearn.kernel_approximation
-
 The :class:`RBFSampler` constructs an approximate mapping for the radial basis
-function kernel. This transformation can be used to explicitly model a kernel map,
-prior to applying a linear algorithm, for example a linear SVM::
+function kernel, also known as *Random Kitchen Sinks* [RR2007]_. This
+transformation can be used to explicitly model a kernel map, prior to applying
+a linear algorithm, for example a linear SVM::
 
     >>> from sklearn.kernel_approximation import RBFSampler
     >>> from sklearn.linear_model import SGDClassifier
@@ -46,8 +63,7 @@ prior to applying a linear algorithm, for example a linear SVM::
     SGDClassifier(alpha=0.0001, class_weight=None, epsilon=0.1, eta0=0.0,
            fit_intercept=True, l1_ratio=0.15, learning_rate='optimal',
            loss='hinge', n_iter=5, n_jobs=1, penalty='l2', power_t=0.5,
-           random_state=None, rho=None, shuffle=False, verbose=0,
-           warm_start=False)
+           random_state=None, shuffle=False, verbose=0, warm_start=False)
     >>> clf.score(X_features, y)
     1.0
 
@@ -58,15 +74,19 @@ inherent randomness of the process, results may vary between different calls to
 the ``fit`` function.
 
 The ``fit`` function takes two arguments:
-`n_components`, which is the target dimensionality of the feature transform,
-and `gamma`, the parameter of the RBF-kernel.  A higher `n_components` will
+``n_components``, which is the target dimensionality of the feature transform,
+and ``gamma``, the parameter of the RBF-kernel.  A higher ``n_components`` will
 result in a better approximation of the kernel and will yield results more
 similar to those produced by a kernel SVM. Note that "fitting" the feature
 function does not actually depend on the data given to the ``fit`` function.
 Only the dimensionality of the data is used.
 Details on the method can be found in [RR2007]_.
 
-.. figure:: ../auto_examples/images/plot_kernel_approximation_2.png
+For a given value of ``n_components`` :class:`RBFSampler` is often less accurate
+as :class:`Nystroem`. :class:`RBFSampler` is cheaper to compute, though, making
+use of larger feature spaces more efficient.
+
+.. figure:: ../auto_examples/images/plot_kernel_approximation_002.png
     :target: ../auto_examples/plot_kernel_approximation.html
     :scale: 50%
     :align: center
@@ -81,25 +101,28 @@ Details on the method can be found in [RR2007]_.
 Additive Chi Squared Kernel
 ---------------------------
 
-The chi squared kernel is a kernel on histograms, often used in computer vision.
+The additive chi squared kernel is a kernel on histograms, often used in computer vision.
 
-The chi squared kernel is given by
+The additive chi squared kernel as used here is given by
 
 .. math::
 
         k(x, y) = \sum_i \frac{2x_iy_i}{x_i+y_i}
 
+This is not exactly the same as :func:`sklearn.metrics.additive_chi2_kernel`.
+The authors of [VZ2010]_ prefer the version above as it is always positive
+definite.
 Since the kernel is additive, it is possible to treat all components
 :math:`x_i` separately for embedding. This makes it possible to sample
 the Fourier transform in regular intervals, instead of approximating
 using Monte Carlo sampling.
 
 The class :class:`AdditiveChi2Sampler` implements this component wise
-deterministic sampling. Each component is sampled `n` times, yielding
-`2n+1` dimensions per input dimension (the multiple of two stems
+deterministic sampling. Each component is sampled :math:`n` times, yielding
+:math:`2n+1` dimensions per input dimension (the multiple of two stems
 from the real and complex part of the Fourier transform).
-In the literature, `n` is usually choosen to be `1` or `2`, transforming
-the dataset to size `n_samples x 5 * n_features` (in the case of `n=2`).
+In the literature, :math:`n` is usually chosen to be 1 or 2, transforming
+the dataset to size ``n_samples * 5 * n_features`` (in the case of :math:`n=2`).
 
 The approximate feature map provided by :class:`AdditiveChi2Sampler` can be combined
 with the approximate feature map provided by :class:`RBFSampler` to yield an approximate
@@ -123,7 +146,7 @@ approximation of the feature map.
 
 The usage of the :class:`SkewedChi2Sampler` is the same as the usage described
 above for the :class:`RBFSampler`. The only difference is in the free
-parameter, that is called `c`.
+parameter, that is called :math:`c`.
 For a motivation for this mapping and the mathematical details see [LS2010]_.
 
 
@@ -132,22 +155,22 @@ Mathematical Details
 
 Kernel methods like support vector machines or kernelized
 PCA rely on a property of reproducing kernel Hilbert spaces.
-For any positive definite kernel function `k` (a so called Mercer kernel),
+For any positive definite kernel function :math:`k` (a so called Mercer kernel),
 it is guaranteed that there exists a mapping :math:`\phi`
 into a Hilbert space :math:`\mathcal{H}`, such that
 
 .. math::
 
-        k(x,y) = < \phi(x), \phi(y)>
+        k(x,y) = \langle \phi(x), \phi(y) \rangle
 
-Where :math:`< \cdot, \cdot >` denotes the inner product in the
+Where :math:`\langle \cdot, \cdot \rangle` denotes the inner product in the
 Hilbert space.
 
 If an algorithm, such as a linear support vector machine or PCA,
 relies only on the scalar product of data points :math:`x_i`, one may use
 the value of :math:`k(x_i, x_j)`, which corresponds to applying the algorithm
 to the mapped data points :math:`\phi(x_i)`.
-The advantage of using `k` is that the mapping :math:`\phi` never has
+The advantage of using :math:`k` is that the mapping :math:`\phi` never has
 to be calculated explicitly, allowing for arbitrary large
 features (even infinite).
 

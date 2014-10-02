@@ -4,598 +4,174 @@ General tests for all estimators in sklearn.
 
 # Authors: Andreas Mueller <amueller@ais.uni-bonn.de>
 #          Gael Varoquaux gael.varoquaux@normalesup.org
-# License: BSD Style.
+# License: BSD 3 clause
+from __future__ import print_function
+
 import os
 import warnings
 import sys
-import traceback
+import pkgutil
 
-import numpy as np
-from scipy import sparse
-
-from sklearn.utils.testing import assert_raises
-from sklearn.utils.testing import assert_equal
-from sklearn.utils.testing import assert_true
-from sklearn.utils.testing import assert_array_equal
-from sklearn.utils.testing import assert_array_almost_equal
+from sklearn.externals.six import PY3
+from sklearn.externals.six.moves import zip
+from sklearn.utils.testing import assert_false
 from sklearn.utils.testing import all_estimators
-from sklearn.utils.testing import set_random_state
 from sklearn.utils.testing import assert_greater
+from sklearn.utils.testing import assert_in
+from sklearn.utils.testing import SkipTest
+from sklearn.utils.testing import ignore_warnings
 
 import sklearn
-from sklearn.base import clone, ClassifierMixin, RegressorMixin, \
-        TransformerMixin, ClusterMixin
-from sklearn.utils import shuffle
-from sklearn.preprocessing import StandardScaler, Scaler
-#from sklearn.cross_validation import train_test_split
-from sklearn.datasets import load_iris, load_boston, make_blobs
-from sklearn.metrics import zero_one_score, adjusted_rand_score
-from sklearn.lda import LDA
-from sklearn.svm.base import BaseLibSVM
+from sklearn.base import (ClassifierMixin, RegressorMixin,
+                          TransformerMixin, ClusterMixin)
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import make_classification
 
-# import "special" estimators
-from sklearn.grid_search import GridSearchCV
-from sklearn.decomposition import SparseCoder
-from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.pls import _PLS, PLSCanonical, PLSRegression, CCA, PLSSVD
-from sklearn.ensemble import BaseEnsemble, RandomTreesEmbedding
-from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier,\
-        OutputCodeClassifier
-from sklearn.feature_selection import RFE, RFECV, SelectKBest
-from sklearn.dummy import DummyClassifier, DummyRegressor
-from sklearn.naive_bayes import MultinomialNB, BernoulliNB
-from sklearn.covariance import EllipticEnvelope, EllipticEnvelop
-from sklearn.feature_extraction import DictVectorizer, FeatureHasher
-from sklearn.feature_extraction.text import TfidfTransformer
-from sklearn.kernel_approximation import AdditiveChi2Sampler
-from sklearn.preprocessing import LabelBinarizer, LabelEncoder, Binarizer, \
-        Normalizer, OneHotEncoder
-from sklearn.cluster import WardAgglomeration, AffinityPropagation, \
-        SpectralClustering
-from sklearn.isotonic import IsotonicRegression
+from sklearn.cross_validation import train_test_split
+from sklearn.linear_model.base import LinearClassifierMixin
+from sklearn.utils.estimator_checks import (
+    check_parameters_default_constructible,
+    check_regressors_classifiers_sparse_data,
+    check_transformer,
+    check_clustering,
+    check_regressors_int,
+    check_regressors_train,
+    check_regressors_pickle,
+    check_transformer_sparse_data,
+    check_transformer_pickle,
+    check_estimators_nan_inf,
+    check_classifiers_one_label,
+    check_classifiers_train,
+    check_classifiers_classes,
+    check_classifiers_input_shapes,
+    check_classifiers_pickle,
+    check_class_weight_classifiers,
+    check_class_weight_auto_classifiers,
+    check_class_weight_auto_linear_classifier,
+    check_estimators_overwrite_params,
+    check_cluster_overwrite_params,
+    check_sparsify_binary_classifier,
+    check_sparsify_multiclass_classifier,
+    check_classifier_data_not_an_array,
+    check_regressor_data_not_an_array,
+    check_transformer_data_not_an_array,
+    check_transformer_n_iter,
+    check_non_transformer_estimators_n_iter,
+    CROSS_DECOMPOSITION)
 
-dont_test = [Pipeline, FeatureUnion, GridSearchCV, SparseCoder,
-        EllipticEnvelope, EllipticEnvelop, DictVectorizer, LabelBinarizer,
-        LabelEncoder, TfidfTransformer, IsotonicRegression, OneHotEncoder,
-        RandomTreesEmbedding, FeatureHasher, DummyClassifier, DummyRegressor]
-meta_estimators = [BaseEnsemble, OneVsOneClassifier, OutputCodeClassifier,
-        OneVsRestClassifier, RFE, RFECV]
+
+def test_all_estimator_no_base_class():
+    # test that all_estimators doesn't find abstract classes.
+    for name, Estimator in all_estimators():
+        msg = ("Base estimators such as {0} should not be included"
+               " in all_estimators").format(name)
+        assert_false(name.lower().startswith('base'), msg=msg)
 
 
 def test_all_estimators():
     # Test that estimators are default-constructible, clonable
     # and have working repr.
-    estimators = all_estimators()
-    clf = LDA()
+    estimators = all_estimators(include_meta_estimators=True)
 
-    for name, E in estimators:
+    # Meta sanity-check to make sure that the estimator introspection runs
+    # properly
+    assert_greater(len(estimators), 0)
+
+    for name, Estimator in estimators:
         # some can just not be sensibly default constructed
-        if E in dont_test:
-            continue
-        # test default-constructibility
-        # get rid of deprecation warnings
-        with warnings.catch_warnings(record=True):
-            if E in meta_estimators:
-                e = E(clf)
-            else:
-                e = E()
-            #test cloning
-            clone(e)
-            # test __repr__
-            repr(e)
+        yield check_parameters_default_constructible, name, Estimator
 
 
 def test_estimators_sparse_data():
-    # All estimators should either deal with sparse data, or raise an
-    # intelligible error message
-    rng = np.random.RandomState(0)
-    X = rng.rand(40, 10)
-    X[X < .8] = 0
-    X = sparse.csr_matrix(X)
-    y = (4 * rng.rand(40)).astype(np.int)
+    # All estimators should either deal with sparse data or raise an
+    # exception with type TypeError and an intelligible error message
     estimators = all_estimators()
-    estimators = [(name, E) for name, E in estimators
-                        if issubclass(E, (ClassifierMixin, RegressorMixin))]
-    for name, Clf in estimators:
-        if Clf in dont_test or Clf in meta_estimators:
-            continue
-        # catch deprecation warnings
-        with warnings.catch_warnings(record=True):
-            clf = Clf()
-        # fit
-        try:
-            clf.fit(X, y)
-        except TypeError, e:
-            if not 'sparse' in repr(e):
-                print ("Estimator %s doesn't seem to fail gracefully on "
-                    "sparse data" % name)
-                traceback.print_exc(file=sys.stdout)
-                raise e
-        except Exception, exc:
-            print ("Estimator %s doesn't seem to fail gracefully on "
-                "sparse data" % name)
-            traceback.print_exc(file=sys.stdout)
-            raise exc
+    estimators = [(name, Estimator) for name, Estimator in estimators
+                  if issubclass(Estimator, (ClassifierMixin, RegressorMixin))]
+    for name, Estimator in estimators:
+        yield check_regressors_classifiers_sparse_data, name, Estimator
 
 
 def test_transformers():
     # test if transformers do something sensible on training set
     # also test all shapes / shape errors
-    estimators = all_estimators()
-    transformers = [(name, E) for name, E in estimators if issubclass(E,
-        TransformerMixin)]
-    X, y = make_blobs(n_samples=30, centers=[[0, 0, 0], [1, 1, 1]],
-            random_state=0, n_features=2, cluster_std=0.1)
-    n_samples, n_features = X.shape
-    X = StandardScaler().fit_transform(X)
-    X -= X.min()
-
-    succeeded = True
-
-    for name, Trans in transformers:
-        if Trans in dont_test or Trans in meta_estimators:
-            continue
-        # these don't actually fit the data:
-        if Trans in [AdditiveChi2Sampler, Binarizer, Normalizer]:
-            continue
-        # catch deprecation warnings
-        with warnings.catch_warnings(record=True):
-            trans = Trans()
-        set_random_state(trans)
-        if hasattr(trans, 'compute_importances'):
-            trans.compute_importances = True
-
-        if Trans is SelectKBest:
-            # SelectKBest has a default of k=10
-            # which is more feature than we have.
-            trans.k = 1
-
-        # fit
-
-        if Trans in (_PLS, PLSCanonical, PLSRegression, CCA, PLSSVD):
-            y_ = np.vstack([y, 2 * y + np.random.randint(2, size=len(y))])
-            y_ = y_.T
-        else:
-            y_ = y
-
-        try:
-            trans.fit(X, y_)
-            X_pred = trans.fit_transform(X, y=y_)
-            if isinstance(X_pred, tuple):
-                for x_pred in X_pred:
-                    assert_equal(x_pred.shape[0], n_samples)
-            else:
-                assert_equal(X_pred.shape[0], n_samples)
-        except Exception as e:
-            print trans
-            print e
-            print
-            succeeded = False
-            continue
-
-        if hasattr(trans, 'transform'):
-            if Trans in (_PLS, PLSCanonical, PLSRegression, CCA, PLSSVD):
-                X_pred2 = trans.transform(X, y_)
-            else:
-                X_pred2 = trans.transform(X)
-            if isinstance(X_pred, tuple) and isinstance(X_pred2, tuple):
-                for x_pred, x_pred2 in zip(X_pred, X_pred2):
-                    assert_array_almost_equal(x_pred, x_pred2, 2,
-                        "fit_transform not correct in %s" % Trans)
-            else:
-                assert_array_almost_equal(X_pred, X_pred2, 2,
-                    "fit_transform not correct in %s" % Trans)
-
-            # raises error on malformed input for transform
-            assert_raises(ValueError, trans.transform, X.T)
-    assert_true(succeeded)
-
-
-def test_transformers_sparse_data():
-    # All estimators should either deal with sparse data, or raise an
-    # intelligible error message
-    rng = np.random.RandomState(0)
-    X = rng.rand(40, 10)
-    X[X < .8] = 0
-    X = sparse.csr_matrix(X)
-    y = (4 * rng.rand(40)).astype(np.int)
-    estimators = all_estimators()
-    estimators = [(name, E) for name, E in estimators
-                        if issubclass(E, TransformerMixin)]
-    for name, Trans in estimators:
-        if Trans in dont_test or Trans in meta_estimators:
-            continue
-        # catch deprecation warnings
-        with warnings.catch_warnings(record=True):
-            if Trans in [Scaler, StandardScaler]:
-                trans = Trans(with_mean=False)
-            else:
-                trans = Trans()
-        # fit
-        try:
-            trans.fit(X, y)
-        except TypeError, e:
-            if not 'sparse' in repr(e):
-                print ("Estimator %s doesn't seem to fail gracefully on "
-                    "sparse data" % name)
-                traceback.print_exc(file=sys.stdout)
-                raise e
-        except Exception, exc:
-            print ("Estimator %s doesn't seem to fail gracefully on "
-                "sparse data" % name)
-            traceback.print_exc(file=sys.stdout)
-            raise exc
+    transformers = all_estimators(type_filter='transformer')
+    for name, Transformer in transformers:
+        # All transformers should either deal with sparse data or raise an
+        # exception with type TypeError and an intelligible error message
+        yield check_transformer_sparse_data, name, Transformer
+        yield check_transformer_pickle, name, Transformer
+        if name not in ['AdditiveChi2Sampler', 'Binarizer', 'Normalizer',
+                        'PLSCanonical', 'PLSRegression', 'CCA', 'PLSSVD']:
+            yield check_transformer_data_not_an_array, name, Transformer
+        # these don't actually fit the data, so don't raise errors
+        if name not in ['AdditiveChi2Sampler', 'Binarizer', 'Normalizer']:
+            # basic tests
+            yield check_transformer, name, Transformer
 
 
 def test_estimators_nan_inf():
     # Test that all estimators check their input for NaN's and infs
-    rnd = np.random.RandomState(0)
-    X_train_finite = rnd.uniform(size=(10, 3))
-    X_train_nan = rnd.uniform(size=(10, 3))
-    X_train_nan[0, 0] = np.nan
-    X_train_inf = rnd.uniform(size=(10, 3))
-    X_train_inf[0, 0] = np.inf
-    y = np.ones(10)
-    y[:5] = 0
     estimators = all_estimators()
-    estimators = [(name, E) for name, E in estimators if
-            issubclass(E, ClassifierMixin) or issubclass(E, RegressorMixin) or
-            issubclass(E, TransformerMixin) or issubclass(E, ClusterMixin)]
-    error_string_fit = "Estimator doesn't check for NaN and inf in fit."
-    error_string_predict = ("Estimator doesn't check for NaN and inf in"
-        " predict.")
-    error_string_transform = ("Estimator doesn't check for NaN and inf in"
-        " transform.")
-    for X_train in [X_train_nan, X_train_inf]:
-        for name, Est in estimators:
-            if Est in dont_test or Est in meta_estimators:
-                continue
-            if Est in (_PLS, PLSCanonical, PLSRegression, CCA, PLSSVD):
-                continue
-            # catch deprecation warnings
-            with warnings.catch_warnings(record=True):
-                est = Est()
-                if "random_state" in est.get_params().keys():
-                    est.set_params(random_state=1)
-                # try to fit
-                try:
-                    if issubclass(Est, ClusterMixin):
-                        est.fit(X_train)
-                    else:
-                        est.fit(X_train, y)
-                except ValueError, e:
-                    if not 'inf' in repr(e) and not 'NaN' in repr(e):
-                        print(error_string_fit, Est, e)
-                        traceback.print_exc(file=sys.stdout)
-                        raise e
-                except Exception, exc:
-                        print(error_string_fit, Est, exc)
-                        traceback.print_exc(file=sys.stdout)
-                        raise exc
-                else:
-                    raise AssertionError(error_string_fit, Est)
-                # actually fit
-                if issubclass(Est, ClusterMixin):
-                    # All estimators except clustering algorithm
-                    # support fitting with (optional) y
-                    est.fit(X_train_finite)
-                else:
-                    est.fit(X_train_finite, y)
-
-                # predict
-                if hasattr(est, "predict"):
-                    try:
-                        est.predict(X_train)
-                    except ValueError, e:
-                        if not 'inf' in repr(e) and not 'NaN' in repr(e):
-                            print(error_string_predict, Est, e)
-                            traceback.print_exc(file=sys.stdout)
-                            raise e
-                    except Exception, exc:
-                        print(error_string_predict, Est, exc)
-                        traceback.print_exc(file=sys.stdout)
-                    else:
-                        raise AssertionError(error_string_predict, Est)
-
-                # transform
-                if hasattr(est, "transform"):
-                    try:
-                        est.transform(X_train)
-                    except ValueError, e:
-                        if not 'inf' in repr(e) and not 'NaN' in repr(e):
-                            print(error_string_transform, Est, e)
-                            traceback.print_exc(file=sys.stdout)
-                            raise e
-                    except Exception, exc:
-                        print(error_string_transform, Est, exc)
-                        traceback.print_exc(file=sys.stdout)
-                    else:
-                        raise AssertionError(error_string_transform, Est)
-
-
-def test_classifiers_one_label():
-    # test classifiers trained on a single label always return this label
-    # or raise an sensible error message
-    rnd = np.random.RandomState(0)
-    X_train = rnd.uniform(size=(10, 3))
-    X_test = rnd.uniform(size=(10, 3))
-    y = np.ones(10)
-    estimators = all_estimators()
-    classifiers = [(name, E) for name, E in estimators if issubclass(E,
-        ClassifierMixin)]
-    error_string_fit = "Classifier can't train when only one class is present."
-    error_string_predict = ("Classifier can't predict when only one class is "
-        "present.")
-    for name, Clf in classifiers:
-        if Clf in dont_test or Clf in meta_estimators:
-            continue
-        # catch deprecation warnings
-        with warnings.catch_warnings(record=True):
-            clf = Clf()
-            # try to fit
-            try:
-                clf.fit(X_train, y)
-            except ValueError, e:
-                if not 'class' in repr(e):
-                    print(error_string_fit, Clf, e)
-                    traceback.print_exc(file=sys.stdout)
-                    raise e
-                else:
-                    continue
-            except Exception, exc:
-                    print(error_string_fit, Clf, exc)
-                    traceback.print_exc(file=sys.stdout)
-                    raise exc
-            # predict
-            try:
-                assert_array_equal(clf.predict(X_test), y)
-            except Exception, exc:
-                print(error_string_predict, Clf, exc)
-                traceback.print_exc(file=sys.stdout)
+    estimators = [(name, E) for name, E in estimators
+                  if (issubclass(E, ClassifierMixin) or
+                      issubclass(E, RegressorMixin) or
+                      issubclass(E, TransformerMixin) or
+                      issubclass(E, ClusterMixin))]
+    for name, Estimator in estimators:
+        if name not in CROSS_DECOMPOSITION + ['Imputer']:
+            yield check_estimators_nan_inf, name, Estimator
 
 
 def test_clustering():
     # test if clustering algorithms do something sensible
     # also test all shapes / shape errors
-    estimators = all_estimators()
-    clustering = [(name, E) for name, E in estimators if issubclass(E,
-        ClusterMixin)]
-    iris = load_iris()
-    X, y = iris.data, iris.target
-    X, y = shuffle(X, y, random_state=7)
-    n_samples, n_features = X.shape
-    X = StandardScaler().fit_transform(X)
+    clustering = all_estimators(type_filter='cluster')
     for name, Alg in clustering:
-        if Alg is WardAgglomeration:
+        # test whether any classifier overwrites his init parameters during fit
+        yield check_cluster_overwrite_params, name, Alg
+        if name not in ('WardAgglomeration', "FeatureAgglomeration"):
             # this is clustering on the features
             # let's not test that here.
-            continue
-        # catch deprecation and neighbors warnings
-        with warnings.catch_warnings(record=True):
-            alg = Alg()
-            if hasattr(alg, "n_clusters"):
-                alg.set_params(n_clusters=3)
-            if hasattr(alg, "random_state"):
-                alg.set_params(random_state=1)
-            if Alg is AffinityPropagation:
-                alg.set_params(preference=-100)
-            # fit
-            alg.fit(X)
-
-        assert_equal(alg.labels_.shape, (n_samples,))
-        pred = alg.labels_
-        assert_greater(adjusted_rand_score(pred, y), 0.4)
-        # fit another time with ``fit_predict`` and compare results
-        if Alg is SpectralClustering:
-            # there is no way to make Spectral clustering deterministic :(
-            continue
-        if hasattr(alg, "random_state"):
-            alg.set_params(random_state=1)
-        with warnings.catch_warnings(record=True):
-            pred2 = alg.fit_predict(X)
-        assert_array_equal(pred, pred2)
+            yield check_clustering, name, Alg
 
 
-def test_classifiers_train():
-    # test if classifiers do something sensible on training set
-    # also test all shapes / shape errors
-    estimators = all_estimators()
-    classifiers = [(name, E) for name, E in estimators if issubclass(E,
-        ClassifierMixin)]
-    iris = load_iris()
-    X_m, y_m = iris.data, iris.target
-    X_m, y_m = shuffle(X_m, y_m, random_state=7)
-    X_m = StandardScaler().fit_transform(X_m)
-    # generate binary problem from multi-class one
-    y_b = y_m[y_m != 2]
-    X_b = X_m[y_m != 2]
-    for (X, y) in [(X_m, y_m), (X_b, y_b)]:
-        # do it once with binary, once with multiclass
-        classes = np.unique(y)
-        n_classes = len(classes)
-        n_samples, n_features = X.shape
-        for name, Clf in classifiers:
-            if Clf in dont_test or Clf in meta_estimators:
-                continue
-            if Clf in [MultinomialNB, BernoulliNB]:
-                # TODO also test these!
-                continue
-            # catch deprecation warnings
-            with warnings.catch_warnings(record=True):
-                clf = Clf()
-            # raises error on malformed input for fit
-            assert_raises(ValueError, clf.fit, X, y[:-1])
-
-            # fit
-            clf.fit(X, y)
-            y_pred = clf.predict(X)
-            assert_equal(y_pred.shape, (n_samples,))
-            # training set performance
-            assert_greater(zero_one_score(y, y_pred), 0.78)
-
-            # raises error on malformed input for predict
-            assert_raises(ValueError, clf.predict, X.T)
-            if hasattr(clf, "decision_function"):
-                try:
-                    # decision_function agrees with predict:
-                    decision = clf.decision_function(X)
-                    if n_classes is 2:
-                        assert_equal(decision.ravel().shape, (n_samples,))
-                        dec_pred = (decision.ravel() > 0).astype(np.int)
-                        assert_array_equal(dec_pred, y_pred)
-                    if n_classes is 3 and not isinstance(clf, BaseLibSVM):
-                        # 1on1 of LibSVM works differently
-                        assert_equal(decision.shape, (n_samples, n_classes))
-                        assert_array_equal(np.argmax(decision, axis=1), y_pred)
-
-                    # raises error on malformed input
-                    assert_raises(ValueError, clf.decision_function, X.T)
-                    # raises error on malformed input for decision_function
-                    assert_raises(ValueError, clf.decision_function, X.T)
-                except NotImplementedError:
-                    pass
-            if hasattr(clf, "predict_proba"):
-                try:
-                    # predict_proba agrees with predict:
-                    y_prob = clf.predict_proba(X)
-                    assert_equal(y_prob.shape, (n_samples, n_classes))
-                    assert_array_equal(np.argmax(y_prob, axis=1), y_pred)
-                    # check that probas for all classes sum to one
-                    assert_array_almost_equal(
-                        np.sum(y_prob, axis=1), np.ones(n_samples))
-                    # raises error on malformed input
-                    assert_raises(ValueError, clf.predict_proba, X.T)
-                    # raises error on malformed input for predict_proba
-                    assert_raises(ValueError, clf.predict_proba, X.T)
-                except NotImplementedError:
-                    pass
-
-            if hasattr(clf, "classes_"):
-                if hasattr(clf, "n_outputs_"):
-                    assert_equal(clf.n_outputs_, 1)
-                    assert_array_equal(
-                        clf.classes_, [classes],
-                        "Unexpected classes_ attribute for %r" % clf)
-                else:
-                    # flat classes array: XXX inconsistent
-                    assert_array_equal(
-                        clf.classes_, classes,
-                        "Unexpected classes_ attribute for %r" % clf)
-
-
-def test_classifiers_classes():
+def test_classifiers():
     # test if classifiers can cope with non-consecutive classes
-    estimators = all_estimators()
-    classifiers = [(name, E) for name, E in estimators if issubclass(E,
-        ClassifierMixin)]
-    iris = load_iris()
-    X, y = iris.data, iris.target
-    X, y = shuffle(X, y, random_state=7)
-    X = StandardScaler().fit_transform(X)
-    y = 2 * y + 1
-    # TODO: make work with next line :)
-    #y = y.astype(np.str)
-    for name, Clf in classifiers:
-        if Clf in dont_test or Clf in meta_estimators:
-            continue
-        if Clf in [MultinomialNB, BernoulliNB]:
-            # TODO also test these!
-            continue
+    classifiers = all_estimators(type_filter='classifier')
+    for name, Classifier in classifiers:
+        # test classfiers can handle non-array data
+        yield check_classifier_data_not_an_array, name, Classifier
+        # test classifiers trained on a single label always return this label
+        yield check_classifiers_one_label, name, Classifier
+        yield check_classifiers_classes, name, Classifier
+        yield check_classifiers_pickle, name, Classifier
+        # basic consistency testing
+        yield check_classifiers_train, name, Classifier
+        if (name not in ["MultinomialNB", "LabelPropagation", "LabelSpreading"]
+            # TODO some complication with -1 label
+                and name not in ["DecisionTreeClassifier", "ExtraTreeClassifier"]):
+                # We don't raise a warning in these classifiers, as
+                # the column y interface is used by the forests.
 
-        # catch deprecation warnings
-        with warnings.catch_warnings(record=True):
-            clf = Clf()
-        # fit
-        clf.fit(X, y)
-        y_pred = clf.predict(X)
-        # training set performance
-        assert_array_equal(np.unique(y), np.unique(y_pred))
-        assert_greater(zero_one_score(y, y_pred), 0.78,
-                       "accuracy of %s not greater than 0.78" % str(Clf))
+            # test if classifiers can cope with y.shape = (n_samples, 1)
+            yield check_classifiers_input_shapes, name, Classifier
 
 
-def test_regressors_int():
-    # test if regressors can cope with integer labels (by converting them to
-    # float)
-    estimators = all_estimators()
-    regressors = [(name, E) for name, E in estimators if issubclass(E,
-        RegressorMixin)]
-    boston = load_boston()
-    X, y = boston.data, boston.target
-    X, y = shuffle(X, y, random_state=0)
-    X = StandardScaler().fit_transform(X)
-    y = np.random.randint(2, size=X.shape[0])
-    for name, Reg in regressors:
-        if Reg in dont_test or Reg in meta_estimators or Reg in (CCA,):
-            continue
-        # catch deprecation warnings
-        with warnings.catch_warnings(record=True):
-            # separate estimators to control random seeds
-            reg1 = Reg()
-            reg2 = Reg()
-        if hasattr(reg1, 'alpha'):
-            reg1.alpha = 0.01
-            reg2.alpha = 0.01
-        if hasattr(reg1, 'random_state'):
-            reg1.set_params(random_state=0)
-            reg2.set_params(random_state=0)
-
-        if Reg in (_PLS, PLSCanonical, PLSRegression):
-            y_ = np.vstack([y, 2 * y + np.random.randint(2, size=len(y))])
-            y_ = y_.T
-        else:
-            y_ = y
-
-        # fit
-        reg1.fit(X, y_)
-        pred1 = reg1.predict(X)
-        reg2.fit(X, y_.astype(np.float))
-        pred2 = reg2.predict(X)
-        assert_array_almost_equal(pred1, pred2, 2, name)
-
-
-def test_regressors_train():
-    estimators = all_estimators()
-    regressors = [(name, E) for name, E in estimators if issubclass(E,
-        RegressorMixin)]
-    boston = load_boston()
-    X, y = boston.data, boston.target
-    X, y = shuffle(X, y, random_state=0)
+def test_regressors():
+    regressors = all_estimators(type_filter='regressor')
     # TODO: test with intercept
     # TODO: test with multiple responses
-    X = StandardScaler().fit_transform(X)
-    y = StandardScaler().fit_transform(y)
-    succeeded = True
-    for name, Reg in regressors:
-        if Reg in dont_test or Reg in meta_estimators:
-            continue
-        # catch deprecation warnings
-        with warnings.catch_warnings(record=True):
-            reg = Reg()
-        if hasattr(reg, 'alpha'):
-            reg.alpha = 0.01
-
-        # raises error on malformed input for fit
-        assert_raises(ValueError, reg.fit, X, y[:-1])
-        # fit
-        try:
-            if Reg in (_PLS, PLSCanonical, PLSRegression, CCA):
-                y_ = np.vstack([y, 2 * y + np.random.randint(2, size=len(y))])
-                y_ = y_.T
-            else:
-                y_ = y
-            reg.fit(X, y_)
-            reg.predict(X)
-
-            if Reg not in (PLSCanonical, CCA):  # TODO: find out why
-                assert_greater(reg.score(X, y_), 0.5)
-        except Exception as e:
-            print(reg)
-            print e
-            print
-            succeeded = False
-
-    assert_true(succeeded)
+    for name, Regressor in regressors:
+        # basic testing
+        yield check_regressors_train, name, Regressor
+        yield check_regressor_data_not_an_array, name, Regressor
+        # Test that estimators can be pickled, and once pickled
+        # give the same answer as before.
+        yield check_regressors_pickle, name, Regressor
+        if name != 'CCA':
+            # check that the regressor handles int input
+            yield check_regressors_int, name, Regressor
 
 
 def test_configure():
@@ -613,8 +189,197 @@ def test_configure():
         with warnings.catch_warnings():
             # The configuration spits out warnings when not finding
             # Blas/Atlas development headers
-            warnings.simplefilter('ignore',  UserWarning)
-            execfile('setup.py', dict(__name__='__main__'))
+            warnings.simplefilter('ignore', UserWarning)
+            if PY3:
+                with open('setup.py') as f:
+                    exec(f.read(), dict(__name__='__main__'))
+            else:
+                execfile('setup.py', dict(__name__='__main__'))
     finally:
         sys.argv = old_argv
         os.chdir(cwd)
+
+
+def test_class_weight_classifiers():
+    # test that class_weight works and that the semantics are consistent
+    classifiers = all_estimators(type_filter='classifier')
+
+    with warnings.catch_warnings(record=True):
+        classifiers = [c for c in classifiers
+                       if 'class_weight' in c[1]().get_params().keys()]
+
+    for name, Classifier in classifiers:
+        if name == "NuSVC":
+            # the sparse version has a parameter that doesn't do anything
+            continue
+        if name.endswith("NB"):
+            # NaiveBayes classifiers have a somewhat different interface.
+            # FIXME SOON!
+            continue
+        yield check_class_weight_classifiers, name, Classifier
+
+
+def test_class_weight_auto_classifiers():
+    """Test that class_weight="auto" improves f1-score"""
+
+    # This test is broken; its success depends on:
+    # * a rare fortuitous RNG seed for make_classification; and
+    # * the use of binary F1 over a seemingly arbitrary positive class for two
+    #   datasets, and weighted average F1 for the third.
+    # Its expectations need to be clarified and reimplemented.
+    raise SkipTest('This test requires redefinition')
+
+    classifiers = all_estimators(type_filter='classifier')
+
+    with warnings.catch_warnings(record=True):
+        classifiers = [c for c in classifiers
+                       if 'class_weight' in c[1]().get_params().keys()]
+
+    for n_classes, weights in zip([2, 3], [[.8, .2], [.8, .1, .1]]):
+        # create unbalanced dataset
+        X, y = make_classification(n_classes=n_classes, n_samples=200,
+                                   n_features=10, weights=weights,
+                                   random_state=0, n_informative=n_classes)
+        X = StandardScaler().fit_transform(X)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.5,
+                                                            random_state=0)
+        for name, Classifier in classifiers:
+            if (name != "NuSVC"
+                # the sparse version has a parameter that doesn't do anything
+                    and not name.startswith("RidgeClassifier")
+                    # RidgeClassifier behaves unexpected
+                    # FIXME!
+                    and not name.endswith("NB")):
+                # NaiveBayes classifiers have a somewhat different interface.
+                # FIXME SOON!
+                yield (check_class_weight_auto_classifiers, name, Classifier,
+                       X_train, y_train, X_test, y_test, weights)
+
+
+def test_class_weight_auto_linear_classifiers():
+    classifiers = all_estimators(type_filter='classifier')
+
+    with warnings.catch_warnings(record=True):
+        linear_classifiers = [
+            (name, clazz)
+            for name, clazz in classifiers
+            if 'class_weight' in clazz().get_params().keys()
+               and issubclass(clazz, LinearClassifierMixin)]
+
+    for name, Classifier in linear_classifiers:
+        if name == "LogisticRegressionCV":
+            # Contrary to RidgeClassifierCV, LogisticRegressionCV use actual
+            # CV folds and fit a model for each CV iteration before averaging
+            # the coef. Therefore it is expected to not behave exactly as the
+            # other linear model.
+            continue
+        yield check_class_weight_auto_linear_classifier, name, Classifier
+
+
+def test_estimators_overwrite_params():
+    # test whether any classifier overwrites his init parameters during fit
+    for est_type in ["classifier", "regressor", "transformer"]:
+        estimators = all_estimators(type_filter=est_type)
+        for name, Estimator in estimators:
+            if (name not in ['CCA', '_CCA', 'PLSCanonical', 'PLSRegression',
+                             'PLSSVD', 'GaussianProcess']):
+                # FIXME!
+                # in particular GaussianProcess!
+                yield check_estimators_overwrite_params, name, Estimator
+
+
+@ignore_warnings
+def test_import_all_consistency():
+    # Smoke test to check that any name in a __all__ list is actually defined
+    # in the namespace of the module or package.
+    pkgs = pkgutil.walk_packages(path=sklearn.__path__, prefix='sklearn.',
+                                 onerror=lambda _: None)
+    submods = [modname for _, modname, _ in pkgs]
+    for modname in submods + ['sklearn']:
+        if ".tests." in modname:
+            continue
+        package = __import__(modname, fromlist="dummy")
+        for name in getattr(package, '__all__', ()):
+            if getattr(package, name, None) is None:
+                raise AttributeError(
+                    "Module '{0}' has no attribute '{1}'".format(
+                        modname, name))
+
+
+def test_root_import_all_completeness():
+    EXCEPTIONS = ('utils', 'tests', 'base', 'setup')
+    for _, modname, _ in pkgutil.walk_packages(path=sklearn.__path__,
+                                               onerror=lambda _: None):
+        if '.' in modname or modname.startswith('_') or modname in EXCEPTIONS:
+            continue
+        assert_in(modname, sklearn.__all__)
+
+
+def test_sparsify_estimators():
+    #Test if predict with sparsified estimators works.
+    #Tests regression, binary classification, and multi-class classification.
+    estimators = all_estimators()
+
+    # test regression and binary classification
+    for name, Estimator in estimators:
+        try:
+            Estimator.sparsify
+            yield check_sparsify_binary_classifier, name, Estimator
+        except:
+            pass
+
+    # test multiclass classification
+    classifiers = all_estimators(type_filter='classifier')
+    for name, Classifier in classifiers:
+        try:
+            Classifier.sparsify
+            yield check_sparsify_multiclass_classifier, name, Classifier
+        except:
+            pass
+
+
+def test_non_transformer_estimators_n_iter():
+    # Test that all estimators of type which are non-transformer
+    # and which have an attribute of max_iter, return the attribute
+    # of n_iter atleast 1.
+    for est_type in ['regressor', 'classifier', 'cluster']:
+        regressors = all_estimators(type_filter=est_type)
+        for name, Estimator in regressors:
+            # LassoLars stops early for the default alpha=1.0 for
+            # the iris dataset.
+            if name == 'LassoLars':
+                estimator = Estimator(alpha=0.)
+            else:
+                estimator = Estimator()
+            if hasattr(estimator, "max_iter"):
+                # These models are dependent on external solvers like
+                # libsvm and accessing the iter parameter is non-trivial.
+                if name in (['Ridge', 'SVR', 'NuSVR', 'NuSVC',
+                             'RidgeClassifier', 'SVC', 'RandomizedLasso',
+                             'LogisticRegressionCV']):
+                    continue
+
+                # Tested in test_transformer_n_iter below
+                elif name in CROSS_DECOMPOSITION or (
+                    name in ['LinearSVC', 'LogisticRegression']
+                    ):
+                    continue
+
+                else:
+                    # Multitask models related to ENet cannot handle
+                    # if y is mono-output.
+                    yield (check_non_transformer_estimators_n_iter,
+                           name, estimator, 'Multi' in name)
+
+
+def test_transformer_n_iter():
+    transformers = all_estimators(type_filter='transformer')
+    for name, Estimator in transformers:
+        estimator = Estimator()
+        # Dependent on external solvers and hence accessing the iter
+        # param is non-trivial.
+        external_solver = ['Isomap', 'KernelPCA', 'LocallyLinearEmbedding',
+                           'RandomizedLasso', 'LogisticRegressionCV']
+
+        if hasattr(estimator, "max_iter") and name not in external_solver:
+            yield check_transformer_n_iter, name, estimator

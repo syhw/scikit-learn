@@ -1,7 +1,7 @@
 """
-=========================================================================
-Support Vector Classification (SVC): scaling the regularization parameter
-=========================================================================
+==============================================
+Scaling the regularization parameter for SVCs
+==============================================
 
 The following example illustrates the effect of scaling the
 regularization parameter when using :ref:`svm` for
@@ -29,9 +29,9 @@ increase.
 When using, for example, :ref:`cross validation <cross_validation>`, to
 set the amount of regularization with `C`, there will be a
 different amount of samples between the main problem and the smaller problems
-withing the folds of the cross validation.
+within the folds of the cross validation.
 
-Since our loss function is dependant on the amount of samples, the latter
+Since our loss function is dependent on the amount of samples, the latter
 will influence the selected value of `C`.
 The question that arises is `How do we optimally adjust C to
 account for the different amount of training samples?`
@@ -72,20 +72,20 @@ is not scaled.
 
 .. topic:: Note:
 
-    Two seperate datasets are used for the two different plots. The reason
+    Two separate datasets are used for the two different plots. The reason
     behind this is the `L1` case works better on sparse data, while `L2`
     is better suited to the non-sparse case.
 """
-print __doc__
+print(__doc__)
 
 
 # Author: Andreas Mueller <amueller@ais.uni-bonn.de>
 #         Jaques Grobler <jaques.grobler@inria.fr>
-# License: BSD
+# License: BSD 3 clause
 
 
 import numpy as np
-import pylab as pl
+import matplotlib.pyplot as plt
 
 from sklearn.svm import LinearSVC
 from sklearn.cross_validation import ShuffleSplit
@@ -102,7 +102,8 @@ n_features = 300
 
 # L1 data (only 5 informative features)
 X_1, y_1 = datasets.make_classification(n_samples=n_samples,
-           n_features=n_features, n_informative=5, random_state=1)
+                                        n_features=n_features, n_informative=5,
+                                        random_state=1)
 
 # L2 data: non sparse, but less features
 y_2 = np.sign(.5 - rnd.rand(n_samples))
@@ -120,15 +121,15 @@ colors = ['b', 'g', 'r', 'c']
 
 for fignum, (clf, cs, X, y) in enumerate(clf_sets):
     # set up the plot for each regressor
-    pl.figure(fignum, figsize=(9, 10))
+    plt.figure(fignum, figsize=(9, 10))
 
     for k, train_size in enumerate(np.linspace(0.3, 0.7, 3)[::-1]):
         param_grid = dict(C=cs)
         # To get nice curve, we need a large number of iterations to
         # reduce the variance
         grid = GridSearchCV(clf, refit=False, param_grid=param_grid,
-                        cv=ShuffleSplit(n=n_samples, train_size=train_size,
-                                        n_iter=250, random_state=1))
+                            cv=ShuffleSplit(n=n_samples, train_size=train_size,
+                                            n_iter=250, random_state=1))
         grid.fit(X, y)
         scores = [x[1] for x in grid.grid_scores_]
 
@@ -137,14 +138,14 @@ for fignum, (clf, cs, X, y) in enumerate(clf_sets):
                   ]
 
         for subplotnum, (scaler, name) in enumerate(scales):
-            pl.subplot(2, 1, subplotnum + 1)
-            pl.xlabel('C')
-            pl.ylabel('CV Score')
+            plt.subplot(2, 1, subplotnum + 1)
+            plt.xlabel('C')
+            plt.ylabel('CV Score')
             grid_cs = cs * float(scaler)  # scale the C's
-            pl.semilogx(grid_cs, scores, label="fraction %.2f" %
-                        train_size)
-            pl.title('scaling=%s, penalty=%s, loss=%s' %
-                     (name, clf.penalty, clf.loss))
+            plt.semilogx(grid_cs, scores, label="fraction %.2f" %
+                         train_size)
+            plt.title('scaling=%s, penalty=%s, loss=%s' %
+                      (name, clf.penalty, clf.loss))
 
-    pl.legend(loc="best")
-pl.show()
+    plt.legend(loc="best")
+plt.show()

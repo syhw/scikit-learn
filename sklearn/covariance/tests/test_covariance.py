@@ -2,15 +2,15 @@
 #         Gael Varoquaux <gael.varoquaux@normalesup.org>
 #         Virgile Fritsch <virgile.fritsch@inria.fr>
 #
-# License: BSD Style.
+# License: BSD 3 clause
 
 import numpy as np
-import warnings
 
 from sklearn.utils.testing import assert_almost_equal
 from sklearn.utils.testing import assert_array_almost_equal
 from sklearn.utils.testing import assert_array_equal
 from sklearn.utils.testing import assert_raises
+from sklearn.utils.testing import assert_warns
 
 from sklearn import datasets
 from sklearn.covariance import empirical_covariance, EmpiricalCovariance, \
@@ -44,7 +44,7 @@ def test_covariance():
                   cov.error_norm, emp_cov, norm='foo')
     # Mahalanobis distances computation test
     mahal_dist = cov.mahalanobis(X)
-    print np.amin(mahal_dist), np.amax(mahal_dist)
+    print(np.amin(mahal_dist), np.amax(mahal_dist))
     assert(np.amin(mahal_dist) > 0)
 
     # test with n_features = 1
@@ -59,8 +59,8 @@ def test_covariance():
     # test with one sample
     X_1sample = np.arange(5)
     cov = EmpiricalCovariance()
-    with warnings.catch_warnings(record=True):
-        cov.fit(X_1sample)
+
+    assert_warns(UserWarning, cov.fit, X_1sample)
 
     # test integer type
     X_integer = np.asarray([[0, 1], [1, 0]])
@@ -120,12 +120,12 @@ def test_ledoit_wolf():
     assert_almost_equal(ledoit_wolf_shrinkage(X_centered,
                                               assume_centered=True),
                         shrinkage_)
-    assert_almost_equal(ledoit_wolf_shrinkage(X_centered,
-                                assume_centered=True, block_size=6),
+    assert_almost_equal(ledoit_wolf_shrinkage(X_centered, assume_centered=True,
+                                              block_size=6),
                         shrinkage_)
     # compare shrunk covariance obtained from data and from MLE estimate
     lw_cov_from_mle, lw_shinkrage_from_mle = ledoit_wolf(X_centered,
-                                                        assume_centered=True)
+                                                         assume_centered=True)
     assert_array_almost_equal(lw_cov_from_mle, lw.covariance_, 4)
     assert_almost_equal(lw_shinkrage_from_mle, lw.shrinkage_)
     # compare estimates given by LW and ShrunkCovariance
@@ -182,8 +182,7 @@ def test_ledoit_wolf():
     # test with one sample
     X_1sample = np.arange(5)
     lw = LedoitWolf()
-    with warnings.catch_warnings(record=True):
-        lw.fit(X_1sample)
+    assert_warns(UserWarning, lw.fit, X_1sample)
 
     # test shrinkage coeff on a simple data set (without saving precision)
     lw = LedoitWolf(store_precision=False)
@@ -254,8 +253,7 @@ def test_oas():
     # test with one sample
     X_1sample = np.arange(5)
     oa = OAS()
-    with warnings.catch_warnings(record=True):
-        oa.fit(X_1sample)
+    assert_warns(UserWarning, oa.fit, X_1sample)
 
     # test shrinkage coeff on a simple data set (without saving precision)
     oa = OAS(store_precision=False)

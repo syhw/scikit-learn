@@ -44,7 +44,7 @@ struct svm_csr_node **csr_to_libsvm (double *values, int* indices, int* indptr, 
 struct svm_parameter * set_parameter(int svm_type, int kernel_type, int degree,
 		double gamma, double coef0, double nu, double cache_size, double C,
 		double eps, double p, int shrinking, int probability, int nr_weight,
-		char *weight_label, char *weight, int max_iter)
+		char *weight_label, char *weight, int max_iter, int random_seed)
 {
     struct svm_parameter *param;
     param = malloc(sizeof(struct svm_parameter));
@@ -65,6 +65,7 @@ struct svm_parameter * set_parameter(int svm_type, int kernel_type, int degree,
     param->weight = (double *) weight;
     param->gamma = gamma;
     param->max_iter = max_iter;
+    param->random_seed = random_seed;
     return param;
 }
 
@@ -101,7 +102,7 @@ struct svm_csr_model *csr_set_model(struct svm_parameter *param, int nr_class,
                             char *SV_data, npy_intp *SV_indices_dims,
                             char *SV_indices, npy_intp *SV_indptr_dims,
                             char *SV_intptr,
-                            char *sv_coef, char *rho, char *nSV, char *label,
+                            char *sv_coef, char *rho, char *nSV,
                             char *probA, char *probB)
 {
     struct svm_csr_model *model;
@@ -135,7 +136,8 @@ struct svm_csr_model *csr_set_model(struct svm_parameter *param, int nr_class,
      */
     if (param->svm_type < 2) {
         memcpy(model->nSV,   nSV,   model->nr_class * sizeof(int));
-        memcpy(model->label, label, model->nr_class * sizeof(int));
+        for(i=0; i < model->nr_class; i++)
+            model->label[i] = i;
     }
 
     for (i=0; i < model->nr_class-1; i++) {
@@ -305,6 +307,10 @@ void copy_intercept(char *data, struct svm_csr_model *model, npy_intp *dims)
     }
 }
 
+void copy_support (char *data, struct svm_model *model)
+{
+    memcpy (data, model->sv_ind, (model->l) * sizeof(int));
+}
 
 /*
  * Some helpers to convert from libsvm sparse data structures
@@ -407,11 +413,6 @@ int free_model_SV(struct svm_csr_model *model)
 }
 
 
-/* rely on built-in facility to control verbose output
- * in the versions of libsvm >= 2.89
- */
-#if LIBSVM_VERSION && LIBSVM_VERSION >= 289
-
 /* borrowed from original libsvm code */
 static void print_null(const char *s) {}
 
@@ -424,14 +425,7 @@ static void print_string_stdout(const char *s)
 /* provide convenience wrapper */
 void set_verbosity(int verbosity_flag){
 	if (verbosity_flag)
-# if LIBSVM_VERSION < 291
-		svm_print_string = &print_string_stdout;
-	else
-		svm_print_string = &print_null;
-# else
 		svm_set_print_string_function(&print_string_stdout);
 	else
 		svm_set_print_string_function(&print_null);
-# endif
 }
-#endif

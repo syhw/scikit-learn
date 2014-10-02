@@ -24,6 +24,7 @@ def configuration(parent_package='', top_path=None):
     config.add_subpackage('cluster/tests')
     config.add_subpackage('covariance')
     config.add_subpackage('covariance/tests')
+    config.add_subpackage('cross_decomposition')
     config.add_subpackage('decomposition')
     config.add_subpackage('decomposition/tests')
     config.add_subpackage("ensemble")
@@ -38,6 +39,8 @@ def configuration(parent_package='', top_path=None):
     config.add_subpackage('gaussian_process')
     config.add_subpackage('gaussian_process/tests')
     config.add_subpackage('neighbors')
+    config.add_subpackage('neural_network')
+    config.add_subpackage('preprocessing')
     config.add_subpackage('manifold')
     config.add_subpackage('metrics')
     config.add_subpackage('semi_supervised')
@@ -54,11 +57,17 @@ def configuration(parent_package='', top_path=None):
         include_dirs=[numpy.get_include()],
         libraries=libraries,
     )
+    config.add_extension(
+        '_isotonic',
+        sources=['_isotonic.c'],
+        include_dirs=[numpy.get_include()],
+        libraries=libraries,
+    )
 
     # some libs needs cblas, fortran-compiled BLAS will not be sufficient
     blas_info = get_info('blas_opt', 0)
     if (not blas_info) or (
-        ('NO_ATLAS_INFO', 1) in blas_info.get('define_macros', [])):
+            ('NO_ATLAS_INFO', 1) in blas_info.get('define_macros', [])):
         config.add_library('cblas',
                            sources=[join('src', 'cblas', '*.c')])
         warnings.warn(BlasNotFoundError.__doc__)

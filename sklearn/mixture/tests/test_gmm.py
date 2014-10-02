@@ -1,10 +1,9 @@
-import itertools
 import unittest
 
 from nose.tools import assert_true
 import numpy as np
-from numpy.testing import assert_array_equal, assert_array_almost_equal, \
-     assert_raises
+from numpy.testing import (assert_array_equal, assert_array_almost_equal,
+                           assert_raises)
 from scipy import stats
 from sklearn import mixture
 from sklearn.datasets.samples_generator import make_spd_matrix
@@ -46,12 +45,20 @@ def test_sample_gaussian():
     assert_true(np.allclose(samples.mean(axis), mu, atol=1.3))
     assert_true(np.allclose(np.cov(samples), cv, atol=2.5))
 
+    # Numerical stability check: in SciPy 0.12.0 at least, eigh may return
+    # tiny negative values in its second return value.
+    from sklearn.mixture import sample_gaussian
+    x = sample_gaussian([0, 0], [[4, 3], [1, .1]],
+                        covariance_type='full', random_state=42)
+    print(x)
+    assert_true(np.isfinite(x).all())
+
 
 def _naive_lmvnpdf_diag(X, mu, cv):
     # slow and naive implementation of lmvnpdf
     ref = np.empty((len(X), len(mu)))
     stds = np.sqrt(cv)
-    for i, (m, std) in enumerate(itertools.izip(mu, stds)):
+    for i, (m, std) in enumerate(zip(mu, stds)):
         ref[:, i] = np.log(stats.norm.pdf(X, m, std)).sum(axis=1)
     return ref
 
@@ -138,15 +145,15 @@ class GMMTester():
         self.means = rng.randint(-20, 20, (self.n_components, self.n_features))
         self.threshold = -0.5
         self.I = np.eye(self.n_features)
-        self.covars = {'spherical': (0.1 + 2 * \
-                        rng.rand(self.n_components, self.n_features)) ** 2,
-                  'tied': make_spd_matrix(self.n_features, random_state=0) +\
-                        5 * self.I,
-                  'diag': (0.1 + 2 * rng.rand(self.n_components,\
-                        self.n_features)) ** 2,
-                  'full': np.array([make_spd_matrix(self.n_features,\
-                        random_state=0)
-                      + 5 * self.I for x in range(self.n_components)])}
+        self.covars = {
+            'spherical': (0.1 + 2 * rng.rand(self.n_components,
+                                             self.n_features)) ** 2,
+            'tied': (make_spd_matrix(self.n_features, random_state=0)
+                     + 5 * self.I),
+            'diag': (0.1 + 2 * rng.rand(self.n_components,
+                                        self.n_features)) ** 2,
+            'full': np.array([make_spd_matrix(self.n_features, random_state=0)
+                              + 5 * self.I for x in range(self.n_components)])}
 
     def test_eval(self):
         if not self.do_test_eval:
@@ -162,11 +169,11 @@ class GMMTester():
         g.covars_ = self.covars[self.covariance_type]
         g.weights_ = self.weights
 
-        gaussidx = np.repeat(range(self.n_components), 5)
+        gaussidx = np.repeat(np.arange(self.n_components), 5)
         n_samples = len(gaussidx)
         X = rng.randn(n_samples, self.n_features) + g.means_[gaussidx]
 
-        ll, responsibilities = g.eval(X)
+        ll, responsibilities = g.score_samples(X)
 
         self.assertEqual(len(ll), n_samples)
         self.assertEqual(responsibilities.shape,
@@ -206,7 +213,7 @@ class GMMTester():
         # the log likelihood to make sure that it increases after each
         # iteration.
         trainll = []
-        for iter in xrange(5):
+        for _ in range(5):
             g.params = params
             g.init_params = ''
             g.fit(X)

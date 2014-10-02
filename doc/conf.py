@@ -12,14 +12,18 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+from __future__ import print_function
 import sys
 import os
+from sklearn.externals.six import u
 
 # If extensions (or modules to document with autodoc) are in another
 # directory, add these directories to sys.path here. If the directory
 # is relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 sys.path.insert(0, os.path.abspath('sphinxext'))
+
+from github_link import make_linkcode_resolve
 
 # -- General configuration ---------------------------------------------------
 
@@ -33,16 +37,11 @@ except:
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['gen_rst',
               'sphinx.ext.autodoc', 'sphinx.ext.autosummary',
-              'sphinx.ext.pngmath',
+              'sphinx.ext.pngmath', 'numpy_ext.numpydoc',
+              'sphinx.ext.linkcode',
               ]
-try:
-    import numpy_ext.numpydoc
-    extensions.append('numpy_ext.numpydoc')
-    # With older versions of sphinx, this causes a crash
-    autosummary_generate = True
-except:
-    # Older version of sphinx
-    extensions.append('numpy_ext_old.numpydoc')
+
+autosummary_generate = True
 
 autodoc_default_flags = ['members', 'inherited-members']
 
@@ -65,15 +64,15 @@ plot_gallery = True
 master_doc = 'index'
 
 # General information about the project.
-project = u'scikit-learn'
-copyright = u'2010–2011, scikit-learn developers (BSD License)'
+project = u('scikit-learn')
+copyright = u('2010 - 2014, scikit-learn developers (BSD License)')
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
 # The short X.Y version.
-version = '0.13-git'
+version = '0.16-git'
 # The full version, including alpha/beta/rc tags.
 import sklearn
 release = sklearn.__version__
@@ -126,8 +125,9 @@ html_theme = 'scikit-learn'
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-html_theme_options = {'oldversion':False, 'collapsiblesidebar': True,
-                      'google_analytics':True}
+html_theme_options = {'oldversion': False, 'collapsiblesidebar': True,
+                      'google_analytics': True, 'surveybanner': False,
+                      'sprintbanner': True}
 
 # Add any paths that contain custom themes here, relative to this directory.
 html_theme_path = ['themes']
@@ -204,11 +204,8 @@ htmlhelp_basename = 'scikit-learndoc'
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto/manual]).
-latex_documents = [
-  ('index', 'user_guide.tex', u'scikit-learn user guide',
-   u'scikit-learn developers', 'manual'),
-
-]
+latex_documents = [('index', 'user_guide.tex', u('scikit-learn user guide'),
+                    u('scikit-learn developers'), 'manual'), ]
 
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.
@@ -219,7 +216,7 @@ latex_logo = "logos/scikit-learn-logo.png"
 #latex_use_parts = False
 
 # Additional stuff for the LaTeX preamble.
-latex_preamble = """
+latex_preamble = r"""
 \usepackage{amsmath}\usepackage{amsfonts}\usepackage{bm}\usepackage{morefloats}
 \usepackage{enumitem} \setlistdepth{10}
 """
@@ -231,3 +228,17 @@ latex_preamble = """
 #latex_use_modindex = True
 
 trim_doctests_flags = True
+
+
+def setup(app):
+    # to hide/show the prompt in code examples:
+    app.add_javascript('js/copybutton.js')
+    # to format example galleries:
+    app.add_javascript('js/examples.js')
+
+
+# The following is used by sphinx.ext.linkcode to provide links to github
+linkcode_resolve = make_linkcode_resolve('sklearn',
+                                         u'https://github.com/scikit-learn/'
+                                         'scikit-learn/blob/{revision}/'
+                                         '{package}/{path}#L{lineno}')
